@@ -19,7 +19,7 @@ import time
 # queste librerie interagiscono con il sistema operativo e non con il web browser quindi bisognerebbe calcolare gli offset manualmente
 # Queste sono le coordinate della finestra del browser angolo sx-up-(x=0 ,y=139) e dx-down-(x=1904, y=1031) quindi y invertita oppure
 # si potrebbe implementare semplicemente il movimento del mouse per simulare un movimento semplice
-
+#TODO aggiungere repository remote
 #TODO ricorda che CLASS_NAME non possono avere spazi nei nomi perciò non si lavora cosi, So if you have spaces in your class attribute, switch to CSS_SELECTOR or XPATH
 #variabili globali
 my_email = "leonardovinted95@gmail.com"
@@ -34,8 +34,14 @@ def processo():
     carica_pagina_login(driver)
     login(driver)
     save_cookies(driver)
-    #profilo()
-    #conteggio_articoli_profilo()
+    load_cookies(driver)
+    recati_al_profilo(driver, "https://www.vinted.it/member/168504727")
+    clicca_articoli_attivi(driver)
+    classe_numero_articoli = "u-flexbox u-justify-content-between u-align-items-center u-flex-grow u-flex-wrap"
+    numero_articoli = conteggio_articoli_profilo(driver, classe_numero_articoli)
+    #iterazione_controllo_articoli()
+
+
     print("<---------- Software Terminato !!!")
     time.sleep(20)
     #TODO una volta fatti i metodi bisogna sbloccarli
@@ -66,6 +72,7 @@ def accetta_consensi_cookie(driver):
         attesa_caricamento_elemento(driver, 5, By.ID, finestra_conferma_cookie)  #click su conferma le mie scelte
         elemento_cookie = driver.find_element(By.CSS_SELECTOR, conferma_scelte_button_class)
         elemento_cookie.click()
+        humanizer(-0.5)
     except Exception:
         pass
 
@@ -86,8 +93,10 @@ def humanizer(offset):
 
 #Metodo per attendere il tempo tra la premuta di un tasto e l'altro
 def typing_humanizer():
-    ran = random.uniform(0.266, 0.354)
+    humanizer(0)
+    ran = random.uniform(0.166, 0.254)
     time.sleep(ran)
+    humanizer(0)
     return ran
 
 
@@ -162,27 +171,60 @@ def load_cookies(driver):
             driver.add_cookie(cookie)
         except Exception: pass
 
-
+#Metodo per fare input di caratteri con un delay umano
 def send_delayed_keys(input_element, text_to_input):
     for character in text_to_input:
         input_element.send_keys(character)
         typing_humanizer()
 
 
+#metodo per recarsi profilo del sito
+def recati_al_profilo(driver,link ):
+    #nome = "user-menu-button"
+    #oggetto = driver.find_element(By.ID, nome)
+    #performa_click(driver,oggetto)
+    humanizer(0)
+    carica_link(driver, link) #TODO da modificare e mettere un action chains invece di carica_link
+    humanizer(0)
 
-def profilo():
+#Metodo per cliccare gli oggetti attivi del profilo utente
+def clicca_articoli_attivi(driver):
+    humanizer(0)
+    button = driver.find_element(By.XPATH, "//span[text()='Attivi']")
+    performa_click(driver,button)
+    humanizer(0)
+
+#metodo per caricare un sito web
+def carica_link(driver, link_destinazione):
+    driver.get(link_destinazione)
+
+def conteggio_articoli_profilo(driver, classe):
+    nome_elemento = "h2.web_ui__Text__title"
+    attesa_caricamento_elemento(driver, 5, By.CSS_SELECTOR, nome_elemento)
+    element = WebDriverWait(driver, 10).until(
+        EC.visibility_of_element_located((
+            By.XPATH,
+            "//div[@class='web_ui__Container__container']//h2[contains(., 'articoli')]"
+        ))
+    )
+    text = element.text.strip()
+    numero = int(''.join(filter(str.isdigit, text)))
+    return numero
+
+#Metodo per Iterare gli articoli e controllare le date
+def iterazione_controlloo_articoli():
+    #Questi sono gli xpath degli oggetti, notiamo che cambia i div verso la fine, si potrebbe scorrere
+    #TODO sarebbe meglio non utilizzare il xpath totale perchè il sito potrebbe struttura del DOM nel tempo e quindi il codice non andrebbe più bene
+    #//*[@id="content"]/div/div[1]/div/div[3]/div[3]/div[3]/div[1]/div[1]/div/div/div/div[1]
+    #//*[@id="content"]/div/div[1]/div/div[3]/div[3]/div[3]/div[1]/div[2]/div/div/div/div[1]
     pass
+#Metodo per spostarsi su un oggetto e cliccarlo, bisogna passare il nome del oggetto per argomento
+def performa_click(driver, oggetto):
+    humanizer(0)
+    azione = ActionChains(driver).move_to_element(oggetto)
+    azione.pause(humanizer(0))
+    azione.click()
+    azione.pause(humanizer(0))
+    azione.perform()
+    humanizer(0)
 
-
-def conteggio_articoli_profilo():
-    pass
-
-#entrata sul sito
-#driver.get("https://search.brave.com")
-
-#login
-#imput_element = driver.find_element(By.ID , "searchbox")
-#imput_element.send_keys("bella tu")
-#imput_element.send_keys("bella tu" + Keys.ENTER)
-#time.sleep(10)
-#driver.quit()
