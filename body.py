@@ -5,7 +5,7 @@ import random
 
 from selenium import webdriver
 from selenium.common import NoSuchElementException, TimeoutException
-from selenium.webdriver import ActionChains
+from selenium.webdriver import ActionChains, Keys
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -38,8 +38,8 @@ def processo():
     recati_al_profilo(driver, "https://www.vinted.it/member/168504727")
     clicca_articoli_attivi(driver)
     classe_numero_articoli = "u-flexbox u-justify-content-between u-align-items-center u-flex-grow u-flex-wrap"
-    numero_articoli = conteggio_articoli_profilo(driver, classe_numero_articoli)
-    #iterazione_controllo_articoli()
+    numero_articoli = conteggio_articoli_profilo(driver, classe_numero_articoli) #TODO controllo del numero
+    #iterazione_controllo_articoli(driver, numero_articoli)
 
 
     print("<---------- Software Terminato !!!")
@@ -56,7 +56,6 @@ def start_browser(sito_web):
     driver.get(sito_web)
     driver.maximize_window()
     return driver
-
 
 #Metodo per gestire le scelte dei cookie
 def accetta_consensi_cookie(driver):
@@ -171,7 +170,7 @@ def load_cookies(driver):
             driver.add_cookie(cookie)
         except Exception: pass
 
-#Metodo per fare input di caratteri con un delay umano
+#Metodo per fare ingresso di caratteri con un delay umano
 def send_delayed_keys(input_element, text_to_input):
     for character in text_to_input:
         input_element.send_keys(character)
@@ -211,13 +210,44 @@ def conteggio_articoli_profilo(driver, classe):
     numero = int(''.join(filter(str.isdigit, text)))
     return numero
 
-#Metodo per Iterare gli articoli e controllare le date
-def iterazione_controlloo_articoli():
-    #Questi sono gli xpath degli oggetti, notiamo che cambia i div verso la fine, si potrebbe scorrere
-    #TODO sarebbe meglio non utilizzare il xpath totale perchè il sito potrebbe struttura del DOM nel tempo e quindi il codice non andrebbe più bene
-    #//*[@id="content"]/div/div[1]/div/div[3]/div[3]/div[3]/div[1]/div[1]/div/div/div/div[1]
-    #//*[@id="content"]/div/div[1]/div/div[3]/div[3]/div[3]/div[1]/div[2]/div/div/div/div[1]
+
+
+#Metodo per Iterare gli articoli, controllare le date e fare tutto quello che serve per caricare o scaricare gli oggetti
+#numero= oggetti da iterare
+def iterazione_controllo_articoli(driver, numero_articoli):
+    articoli = driver.find_elements(By.CSS_SELECTOR,
+                                    ".u-position-relative.u-min-height-none.u-flex-auto.new-item-box__image-container")
+    contatore = numero_articoli
+    # Store the ID of the original window
+    original_window = driver.current_window_handle
+    while contatore >= 0:
+        apertura_articolo(driver, original_window, articoli[contatore])
+        contatore -= 1
+
+
+
+#Metodo per controllare la data del articolo e controllare se cancellarlo e rimetterlo
+def apertura_articolo(driver, original_windows, articolo):
+    humanizer(0)
+    # apri in una nuova scheda (CTRL + click)
+    articolo.send_keys(Keys.CONTROL + Keys.RETURN)  # su Mac usa Keys.COMMAND
+    # aspetta un attimo che la scheda si apra
+    time.sleep(4)
+    # ottieni tutti gli handle (le schede aperte)
+    tabs = driver.window_handles
+    # passa all'ultima scheda
+    driver.switch_to.window(tabs[-1])
+    #TODO qui fare il metodo per controllare l'articolo--------
+    #ritorno alla scheda principale
+    driver.close()
+    driver.switch_to.window(driver.window_handles[0])
+
+#Metodo per controllare gli articoli
+def controllo_articolo():
     pass
+
+
+
 #Metodo per spostarsi su un oggetto e cliccarlo, bisogna passare il nome del oggetto per argomento
 def performa_click(driver, oggetto):
     humanizer(0)
