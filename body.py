@@ -1,8 +1,12 @@
+import pathlib
 import pickle
+import re
 
 import undetected_chromedriver as uc
 import random
-
+from dateutil.relativedelta import relativedelta
+import yaml
+from datetime import datetime, timedelta
 from selenium import webdriver
 from selenium.common import NoSuchElementException, TimeoutException
 from selenium.webdriver import ActionChains, Keys
@@ -11,6 +15,9 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import time
+
+import Database_locale
+
 #-----------------------------------------------------------------------------------------------------------------------
 #TODO check versioni chromedriver e chrome
 
@@ -35,6 +42,33 @@ import time
 
 #TODO Fare un metodo per verificare se gli href cambiano nel tempo su vinted se no, si potrebbe salvare a priori il link del
 # articolo e andare direttamente al link per eliminarlo senza fare la verifica online ma in locale dellla data di caricamento vistop che la si può salvare durante il caricamento
+
+import pickle
+
+
+@DeprecationWarning
+def per_ora_non_serve():
+    class ArticoloVin:
+        def __init__(self, name):
+            self.name = name
+
+    # Create an instance
+    my_object = ArticoloVin('Example')
+
+    # Save the instance to a file
+    with open('class_info.pkl', 'wb') as f:
+        pickle.dump(my_object, f)
+
+
+    #load the instance from the file
+    def leggi_articolo(path_articolo):
+        with open(path_articolo, 'rb') as f:
+            loaded_object = pickle.load(f)
+            return loaded_object  # Output: Example
+
+
+
+
 
 
 #variabili globali
@@ -244,7 +278,8 @@ def iterazione_controllo_articoli(driver, numero_articoli):
             humanizer(0)
             #gestione_articolo(driver, array_link_articoli[contatore])#TODO riguardare logic
             humanizer(0)
-    except Exception: pass
+    except Exception:
+        pass
 
 
 #Metodo per recuperare tutti i link degli articoli passati come array di webElements e che li ritorna come array di str
@@ -260,7 +295,6 @@ def recupera_link_articoli(articoli, numero_articoli):
         return array_link_articoli
     return array_link_articoli
 
-
 #TODO - Warning - questo metodo potrebbe non scrollare fino in fondo
 #Metodo per scrollare la lista degli articoli fino in fondo
 def scroll(driver, numero_articoli):
@@ -275,7 +309,6 @@ def scroll(driver, numero_articoli):
         humanizer(-0.5)
     humanizer(0)
 
-
 #Questo metodo serve per aprire il link del articolo passato, controllare se è da eliminare, gestire database locale,
 #eliminarlo come ultima fase
 def gestione_articolo(driver, link_articolo):
@@ -283,19 +316,70 @@ def gestione_articolo(driver, link_articolo):
     driver.get(link_articolo)
     time.sleep(2)
     humanizer(0)
-    #controlla_data_articolo()
-    #gestione_database_locale()
-    #cancella_articolo(driver)
-    pass
+    esito_da_cancellare = controllo_eliminazione_articolo(driver)
+    #passo esito booleano e se True apportare le modifiche
+    if esito_da_cancellare:
+        #cancella_articolo(esito_da_cancellare)
+        pass
+    else: driver.back()
 
+
+#Metodo che va indietro alla pagina precedente in base al esito della verifica della data, se non è scaduta si va indietro alla lista degli articoli
+def indietro_pagina(driver, esito_da_cancellare):
+    if esito_da_cancellare: return
+    else: driver.back()
 
 #Metodo per controllare la data del articolo e vedere se dobbiamo eliminarlo oppure no
-def controlla_data_articolo():
-    pass
+#return True se è da eliminare
+def controllo_eliminazione_articolo(driver):
+    caricato_span = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, "//span[normalize-space(text())='Caricato']")))
+    upload_date_elem = caricato_span.find_element(By.XPATH, "../../div[@itemprop='upload_date']/span")
+    upload_date = upload_date_elem.text
+    eta_articolo = ore_trascorse(upload_date)
+    if eta_articolo > 72: return True
+    else: return False
 
-#Metodo per gestire gli articoli salvati in locale e farli cambiare di categoria visto che vengono eliminati ad esempio
-def gestione_database_locale():
-    pass
+
+
+#Metodo per convertire il formato del sito web in ore trascorse passando il formato in stringa
+def ore_trascorse(testo: str) -> float:
+    testo = testo.strip().lower()
+    parole_numeri = {
+        "un": 1, "una": 1, "un'": 1, "uno": 1,
+        "due": 2, "tre": 3, "quattro": 4, "cinque": 5,
+        "sei": 6, "sette": 7, "otto": 8, "nove": 9,
+        "dieci": 10, "undici": 11, "dodici": 12,
+        "tredici": 13, "quattordici": 14, "quindici": 15,
+        "sedici": 16, "diciassette": 17, "diciotto": 18,
+        "diciannove": 19, "venti": 20, "ventuno": 21,
+        "ventidue": 22, "ventitre": 23,
+    }
+    numero = None
+    for parola, valore in parole_numeri.items():
+        if testo.startswith(parola):
+            numero = valore
+            break
+    if numero is None:
+        # se non è parola, prova a leggere cifre
+        num_str = ''.join([c for c in testo if c.isdigit()])
+        numero = int(num_str) if num_str else 1
+    if "minut" in testo:
+        return numero / 60  # minuti → ore
+    elif "ora" in testo:
+        return numero
+    elif "ore" in testo:
+        return numero
+    elif "giorn" in testo:
+        return numero * 24
+    elif "settim" in testo:
+        return numero * 24 * 7
+    elif "mes" in testo:
+        return numero * 24 * 30  # approssimazione: 1 mese = 30 giorni
+    elif "ann" in testo:
+        return numero * 24 * 365  # approssimazione: 1 anno = 365 giorni
+    else:
+        return 0  # fallback se non riconosce
+
 
 #Metodo per controllare la data del articolo e controllare se cancellarlo e rimetterlo
 def apertura_articolo_nuova_finestra(driver, articolo):
@@ -322,13 +406,6 @@ def articolo_data_scaduta(driver):
     pass
 
 
-
-
-#Metodo per spostare gli articoli nelle cartelle del pc
-def sposta_articolo():
-    pass
-
-
 def cancella_articolo(driver):
     try:
         humanizer(0)
@@ -347,8 +424,45 @@ def cancella_articolo(driver):
         azione.perform()
         humanizer(0)
         azione.perform()
-        sposta_articolo()
+        #recupera_codice
+        #sposta_articolo(codice)
     except Exception: return Exception
+
+
+
+#Metodo per spostare gli articoli nel database locale da articoli_online ad articoli_non_caricato
+def sposta_articolo(codice):
+    Database_locale.sposta_dir_articolo(codice)
+
+#Recupera codice alfanumerico dal articolo il codice può avere una "a" o "b" d'avanti al numero del articolo e indica
+#quale album di fotografie è stato utilizzato
+def recupera_codice_alfanumerico(driver):
+    desc_element = driver.find_element(
+        By.CSS_SELECTOR,
+        "span.web_ui__Text__text.web_ui__Text__body.web_ui__Text__left.web_ui__Text__format"
+    )
+    desc_text = desc_element.text
+    #Cerca il codice alfanumerico tipo 'a1921242' o 'b4321'
+    match = re.search(r'\b[ab]\d{1,7}\b', desc_text)
+    #Recupera il codice trovato
+    if match:
+        codice = match.group(0)
+        return codice
+    else:
+        return 0
+
+
+#Metodo per reuperare il codice del articolo tramite combinazione di hashtag
+def recupera_codice_hashtag(driver):
+    # #Vinteditalia #Secondamano #Modasostenibile #Vestiti #Moda #Vintage #Mango #Accessori #Italia #Italy
+    span_element = driver.find_element(By.CSS_SELECTOR, ".web_ui__Text__text.web_ui__Text__body.web_ui__Text__left.web_ui__Text__format")
+
+    hashtags_elements = driver.find_elements(By.XPATH, "//span//a[starts-with(@href, '/catalog?search_text=%23')]")
+    all_hashtags = [a.text for a in hashtags_elements]
+    first_6_hashtags = all_hashtags[:6]
+
+
+
 
 #Metodo per spostarsi su un oggetto e cliccarlo, bisogna passare il nome del oggetto per argomento
 def performa_click(driver, oggetto):
@@ -360,6 +474,19 @@ def performa_click(driver, oggetto):
     azione.perform()
     humanizer(0)
 
+#TODO questo codice funzionerà solo su questo pc non su altri perchè la gestione dei path non è corretta bisogna
+# cambiare alla fine dello sviluppo la gestione dei path e farlo relativo alla cartella dove gira il programma
+#Metodo che sposta la cartella del prodotto tramit il nome/codice del articolo, la cartella avrà come nome il codice del articolo
+def scadenza_articolo(codice):
+    old_path = r"C:\Users\Leon\OneDrive - Università Politecnica delle Marche\_Vinted\CARICATI"
+    new_path = r"C:\Users\Leon\OneDrive - Università Politecnica delle Marche\_Vinted\DA CARICARE"
+    Database_locale.sposta_dir_articolo(pathlib.Path(old_path, codice), pathlib.Path(new_path, codice))
+
+#Metodo che sposta la cartella del prodotto tramit il nome/codice del articolo, la cartella avrà come nome il codice del articolo
+def rinnovo_articolo(codice):
+    new_path = r"C:\Users\Leon\OneDrive - Università Politecnica delle Marche\_Vinted\CARICATI"
+    old_path = r"C:\Users\Leon\OneDrive - Università Politecnica delle Marche\_Vinted\DA CARICARE"
+    Database_locale.sposta_dir_articolo(pathlib.Path(old_path, codice), pathlib.Path(new_path, codice))
 
 
 def diagnosi():
