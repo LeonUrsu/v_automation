@@ -33,7 +33,7 @@ import Database_locale
 
 # TODO evitare sempre la stessa sequenza di azioni
 
-#TODO SI potrebbero utilizzare le librerie (PyAutoGUI, pynput) per simulare lo spostamento del mouse, purtroppo
+# TODO SI potrebbero utilizzare le librerie (PyAutoGUI, pynput) per simulare lo spostamento del mouse, purtroppo
 # queste librerie interagiscono con il sistema operativo e non con il web browser quindi bisognerebbe calcolare gli offset manualmente
 # Queste sono le coordinate della finestra del browser angolo sx-up-(x=0 ,y=139) e dx-down-(x=1904, y=1031) quindi y invertita oppure
 # si potrebbe implementare semplicemente il movimento del mouse per simulare un movimento semplice
@@ -84,16 +84,15 @@ path_caricati = pathlib.Path().cwd().joinpath(cartella_caricati)
 path_da_caricare = pathlib.Path().cwd().joinpath(cartella_da_caricare)
 
 
-
 # QUESTO é IL METODO PRINCIPALE DELLO SCRIPT
 def processo_rinnovo_articoli():
     try:
         driver = start_browser(sito_vinted)
         accetta_consensi_cookie(driver)
-        carica_pagina_login(driver)
+        apertura_pagina_login(driver)
         load_cookies(driver)
         login(driver)
-        recati_al_profilo(driver, "https://www.vinted.it/member/168504727")
+        apertura_pagina_profilo(driver, "https://www.vinted.it/member/168504727")
         clicca_articoli_attivi(driver)
         numero_articoli = conteggio_articoli_profilo(driver)  # TODO da controllare/testare
         individuazione_articoli(driver, numero_articoli)
@@ -105,25 +104,43 @@ def processo_rinnovo_articoli():
     print("- - - Software Terminato - - -")
 
 
-#Metodo per caricare articoli sun profilo del sito web, dalla cartella DA CARICARE
-def processo_carica_articoli_online(caricati_path, da_caricare_path):
+# Metodo per caricare articoli sun profilo del sito web, dalla cartella DA CARICARE
+def processo_carica_articoli_online(driver, caricati_path, da_caricare_path):
     codici_articoli_da_caricare = [item.name for item in da_caricare_path.iterdir() if item.is_dir()]
     for codice in codici_articoli_da_caricare:
         path_articolo = da_caricare_path.joinpath(codice)
-        brand =  next(path_articolo.joinpath("titolo")).name
-        colore =  next(path_articolo.joinpath("colore")).name
-        condizioni =  next(path_articolo.joinpath("condizioni")).name
-        descrizione =  next(path_articolo.joinpath("descrizione")).name
+        brand = next(path_articolo.joinpath("titolo")).name
+        colore = next(path_articolo.joinpath("colore")).name
+        condizioni = next(path_articolo.joinpath("condizioni")).name
+        descrizione = next(path_articolo.joinpath("descrizione")).name
         cartelle_foto = sorted((path_articolo / "foto").iterdir())  # elenco delle sottocartelle ordinate
         album_selezionato = cartelle_foto[2].name.replace("is_", "")
         album_foto = path_articolo.joinpath("foto").joinpath(album_selezionato)
-        pacco =  next(path_articolo.joinpath("pacco")).name
-        prezzo =  next(path_articolo.joinpath("prezzo")).name
-        taglia =  next(path_articolo.joinpath("taglia")).name
-        titolo =  next(path_articolo.joinpath("titolo")).name
+        pacco = next(path_articolo.joinpath("pacco")).name
+        prezzo = next(path_articolo.joinpath("prezzo")).name
+        taglia = next(path_articolo.joinpath("taglia")).name
+        titolo = next(path_articolo.joinpath("titolo")).name
+        apertura_pagina_vendita(driver)
 
-
-
+#TODO da testare in qualche modo intelligente, l'offset impostato sempbra che clicca sempre sul pulsante vendi, da mettere un fallback di recupero
+#Metodo per aprire la pagina per caricare l'articolo di vendita, perchè funzioni correttamente questo metodo deve
+# essere chiamato da un luogo in cui è presente la foto del profilo e il tasto di vendi subito
+def apertura_pagina_vendita(driver):
+    humanizer(0)
+    immagine_profilo = driver.find_element(By.ID, "user-menu-button")
+    azione = ActionChains(driver)
+    azione.move_to_element_with_offset(immagine_profilo, 50 + random.randint(0, 60), random.randint(0, 10))
+    humanizer(0)
+    azione.click()
+    humanizer(0)
+    azione.perform()
+    humanizer(5)
+    #routine di fallback
+    try: attesa_caricamento_elemento(driver,5, By.ID, "photos")
+    except NoSuchElementException:
+        humanizer(0)
+        driver.get("https://www.vinted.it/items/new")
+        humanizer(0)
 
 
 # serve per accendere il browser, metterlo a schermo intero e andare ad un sito web passato per parametro
@@ -180,7 +197,7 @@ def typing_humanizer():
 
 
 # Questo metodo serve per accedere alla pagina del login
-def carica_pagina_login(driver):
+def apertura_pagina_login(driver):
     nome_classe = ".web_ui__Button__button.web_ui__Button__outlined.web_ui__Button__small.web_ui__Button__primary.web_ui__Button__truncated"
     try:
         attesa_caricamento_elemento(driver, 5, By.CSS_SELECTOR, nome_classe)
@@ -265,7 +282,7 @@ def send_delayed_keys(input_element, text_to_input):
 
 
 # metodo per recarsi profilo del sito
-def recati_al_profilo(driver, link):
+def apertura_pagina_profilo(driver, link):
     # nome = "user-menu-button"
     # oggetto = driver.find_element(By.ID, nome)
     # performa_click(driver,oggetto)
@@ -286,7 +303,8 @@ def clicca_articoli_attivi(driver):
 def carica_link(driver, link_destinazione):
     driver.get(link_destinazione)
 
-#Metodo per contare gli articoli all'interno di una pagina del profilo
+
+# Metodo per contare gli articoli all'interno di una pagina del profilo
 def conteggio_articoli_profilo(driver):
     nome_elemento = "u-z-index-isolate"
     attesa_caricamento_elemento(driver, 5, By.CSS_SELECTOR, nome_elemento)
@@ -360,7 +378,7 @@ def gestione_articolo(driver, link_articolo):
     # passo esito booleano e se True apportare le modifiche
     if esito_da_cancellare:
         codice_articolo = recupera_codice_alfanumerico(driver)
-        #salva_info_articolo_off(driver, codice_articolo)# non lo salviamo è complicato web->pc
+        # salva_info_articolo_off(driver, codice_articolo)# non lo salviamo è complicato web->pc
         humanizer(0)
         cancella_articolo_online(driver)
         scadenza_articolo(codice_articolo)
@@ -368,16 +386,16 @@ def gestione_articolo(driver, link_articolo):
     else:
         driver.back()
 
-#Metodo per cambiare identificativo del album in modo da caricare le foto diverse del articolo
-def cambia_album(codice):
-    #TODO
-    pass
 
+# Metodo per cambiare identificativo del album in modo da caricare le foto diverse del articolo
+def cambia_album(codice):
+    # TODO
+    pass
 
 
 # Metodo per recuperare lo stato dell'articolo online e salvarlo nella sua cartella offline per un eventuale rinnovo futuro
 def salva_info_articolo_off(driver, codice_articolo):
-    #TODO
+    # TODO
     articolo = ArticoloVin()
     attributi_da_settare = []
     # titolo - ok class - driver.find_elements(By.XPATH,"//*[@class='web_ui__Text__text web_ui__Text__title web_ui__Text__left']")
@@ -447,6 +465,7 @@ def recupero_info_da_sidebar_articolo(web_element):
     print("Venditore:", venditore)
     print("Descrizione:", descrizione)
 
+
 def safe_text(root, css):
     """Trova il primo elemento che corrisponde al CSS selector all’interno di root, oppure restituisce None"""
     try:
@@ -454,21 +473,25 @@ def safe_text(root, css):
     except NoSuchElementException:
         return None
 
+
 def estrai_info_sidebar(sidebar):
     """Estrae titolo, prezzo, brand, taglia e descrizione da un elemento <aside> di Vinted."""
     info = {}
 
     # Titolo
-    info["titolo"] = sidebar.find_element(By.XPATH,"//*[@class='web_ui__Text__text web_ui__Text__title web_ui__Text__left']").text
+    info["titolo"] = sidebar.find_element(By.XPATH,
+                                          "//*[@class='web_ui__Text__text web_ui__Text__title web_ui__Text__left']").text
 
     # Prezzo
-    info["prezzo"] = sidebar.find_element(By.XPATH, ".//div[@data-testid='item-price']//p[contains(@class,'web_ui__Text__subtitle')]").text
+    info["prezzo"] = sidebar.find_element(By.XPATH,
+                                          ".//div[@data-testid='item-price']//p[contains(@class,'web_ui__Text__subtitle')]").text
 
     # Brand
     info["brand"] = sidebar.find_element(By.XPATH, ".//span[@itemprop='name']").text
 
     # Taglia
-    info["taglia"] = sidebar.find_element(By.XPATH, ".//div[@data-testid='item-attributes-size']//span[contains(@class,'web_ui__Text__subtitle')]").text
+    info["taglia"] = sidebar.find_element(By.XPATH,
+                                          ".//div[@data-testid='item-attributes-size']//span[contains(@class,'web_ui__Text__subtitle')]").text
 
     # Descrizione
     info["descrizione"] = sidebar.find_element(By.XPATH, ".//div[@itemprop='description']").text
@@ -629,12 +652,14 @@ def performa_click(driver, oggetto):
 
 # Metodo che sposta la cartella del prodotto tramite il nome/codice del articolo, la cartella avrà come nome il codice del articolo
 def scadenza_articolo(codice):
-    Database_locale.sposta_dir_articolo(pathlib.Path(path_caricati, codice[1:]), pathlib.Path(path_da_caricare, codice[1:]))
+    Database_locale.sposta_dir_articolo(pathlib.Path(path_caricati, codice[1:]),
+                                        pathlib.Path(path_da_caricare, codice[1:]))
 
 
 # Metodo che sposta la cartella del prodotto tramite il nome/codice del articolo, la cartella avrà come nome il codice del articolo
 def rinnovo_articolo(codice):
-    Database_locale.sposta_dir_articolo(pathlib.Path(path_da_caricare, codice[1:]), pathlib.Path(path_caricati, codice[1:]))
+    Database_locale.sposta_dir_articolo(pathlib.Path(path_da_caricare, codice[1:]),
+                                        pathlib.Path(path_caricati, codice[1:]))
 
 
 def diagnosi():
@@ -661,6 +686,3 @@ def diagnosi():
     # se true ti riconosce come bot
     print(driver.execute_script(
         "return {webdriver: navigator.webdriver, userAgent: navigator.userAgent, plugins: navigator.plugins.length, language: navigator.language};"))
-
-
-
