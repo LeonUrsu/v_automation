@@ -1,15 +1,11 @@
 import os
 import pathlib
-import pickle
 import re
-
 import undetected_chromedriver as uc
+import pickle
 import random
-from dateutil.relativedelta import relativedelta
-import yaml
-from datetime import datetime, timedelta
 from selenium import webdriver
-from selenium.common import NoSuchElementException, TimeoutException, ElementClickInterceptedException
+from selenium.common import NoSuchElementException, TimeoutException
 from selenium.webdriver import ActionChains, Keys
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
@@ -17,12 +13,11 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import time
 
-from urllib3.util import wait
-
 import Database_locale
-
+import controller
 
 # -----------------------------------------------------------------------------------------------------------------------
+
 # TODO check versioni chromedriver e chrome
 
 # TODO aggiungere tempi di attesa per rendere il programma random
@@ -47,56 +42,19 @@ import Database_locale
 # TODO Fare un metodo per verificare se gli href cambiano nel tempo su vinted se no, si potrebbe salvare a priori il link del
 #  articolo e andare direttamente al link per eliminarlo senza fare la verifica online ma in locale dellla data di caricamento vistop che la si può salvare durante il caricamento
 
-class ArticoloVin:
-    def __init__(self):
-        pass
+# TODO IDEA fare che la data dell'oggetto non viene letta dal sito ma viene salvata in locale durante il caricamento dell'oggetto
 
-
-import pickle
-
-
-@DeprecationWarning
-def per_ora_non_serve():
-    # Create an instance
-    my_object = ArticoloVin('Example')
-
-    # Save the instance to a file
-    with open('class_info.pkl', 'wb') as f:
-        pickle.dump(my_object, f)
-
-    # load the instance from the file
-    def leggi_articolo(path_articolo):
-        with open(path_articolo, 'rb') as f:
-            loaded_object = pickle.load(f)
-            return loaded_object  # Output: Example
-
-
-# variabili globali----------------------------------------------------------------------------------------
-my_email = "leonardovinted95@gmail.com"
-my_password = "3gigio3leo*"
-driver_name = "chromedriver.exe"
-sito_vinted = "https://www.vinted.it/"
-# path_caricati = r"C:\Users\Leon\OneDrive - Università Politecnica delle Marche\_Vinted\CARICATI"
-# path_da_caricare = r"C:\Users\Leon\OneDrive - Università Politecnica delle Marche\_Vinted\DA CARICARE"
-cartella_caricati = "CARICATI"
-cartella_da_caricare = "DA CARICARE"
-path_caricati = pathlib.Path().cwd().joinpath(cartella_caricati)
-path_da_caricare = pathlib.Path().cwd().joinpath(cartella_da_caricare)
 
 
 # QUESTO é IL METODO PRINCIPALE DELLO SCRIPT
 def processo_rinnovo_articoli():
     try:
-        driver = start_browser(sito_vinted)
-        accetta_consensi_cookie(driver)
-        apertura_pagina_login(driver)
-        load_cookies(driver)
-        login(driver)
+        driver = avvio_browser()
         apertura_pagina_profilo(driver, "https://www.vinted.it/member/168504727")
         clicca_articoli_attivi(driver)
         numero_articoli = conteggio_articoli_profilo(driver)  # TODO da controllare/testare
         individuazione_articoli(driver, numero_articoli)
-        processo_carica_articoli_online(path_caricati, path_da_caricare)
+        processo_carica_articoli_online()
         print("Resoconto: SUCCESSO")
         time.sleep(20)
     except Exception:
@@ -105,25 +63,296 @@ def processo_rinnovo_articoli():
 
 
 # Metodo per caricare articoli sun profilo del sito web, dalla cartella DA CARICARE
-def processo_carica_articoli_online(driver, caricati_path, da_caricare_path):
-    codici_articoli_da_caricare = [item.name for item in da_caricare_path.iterdir() if item.is_dir()]
+def processo_carica_articoli_online():
+    driver = avvio_browser()
+    codici_articoli_da_caricare = [item.name for item in controller.path_da_caricare.iterdir() if item.is_dir()]
     for codice in codici_articoli_da_caricare:
-        path_articolo = da_caricare_path.joinpath(codice)
-        brand = next(path_articolo.joinpath("titolo")).name
-        colore = next(path_articolo.joinpath("colore")).name
-        condizioni = next(path_articolo.joinpath("condizioni")).name
-        descrizione = next(path_articolo.joinpath("descrizione")).name
-        cartelle_foto = sorted((path_articolo / "foto").iterdir())  # elenco delle sottocartelle ordinate
-        album_selezionato = cartelle_foto[2].name.replace("is_", "")
-        album_foto = path_articolo.joinpath("foto").joinpath(album_selezionato)
-        pacco = next(path_articolo.joinpath("pacco")).name
-        prezzo = next(path_articolo.joinpath("prezzo")).name
-        taglia = next(path_articolo.joinpath("taglia")).name
-        titolo = next(path_articolo.joinpath("titolo")).name
-        apertura_pagina_vendita(driver)
+        try:
+            dati_articolo = creazione_dizionario_dati_articolo(controller.path_da_caricare, codice)
+            apertura_pagina_vendita(driver)
+            esito = inserimento_dati_articolo_pagina_vendita(driver, dati_articolo)
+            if esito:
+                scadenza_articolo_database(codice)
+            else:
+                raise Exception
+        except Exception:
+            print(f"{codice} - Articolo Non Inserito")
 
-#TODO da testare in qualche modo intelligente, l'offset impostato sempbra che clicca sempre sul pulsante vendi, da mettere un fallback di recupero
-#Metodo per aprire la pagina per caricare l'articolo di vendita, perchè funzioni correttamente questo metodo deve
+
+# Metodo per creare un dizionario con i dati dell'articolo dai dati disponibili nei path
+# questo metodo deve essere rivisto se cambiamo il modo di archiviazione dell'articolo offline
+def creazione_dizionario_dati_articolo(da_caricare_path, codice):
+    path_articolo = da_caricare_path.joinpath(codice)
+    dati_articolo = {}
+    dati_articolo["titolo"] = next(path_articolo.joinpath("titolo")).name
+    dati_articolo["colore"] = next(path_articolo.joinpath("colore")).name
+    dati_articolo["condizioni"] = next(path_articolo.joinpath("condizioni")).name
+    dati_articolo["descrizione"] = next(path_articolo.joinpath("descrizione")).name
+    cartelle_foto = sorted((path_articolo / "foto").iterdir())  # elenco delle sottocartelle ordinate
+    lettera_album_selezionato = cartelle_foto[2].name.replace("is_", "")
+    dati_articolo["album_foto_path"] = path_articolo.joinpath("foto").joinpath(lettera_album_selezionato)
+    dati_articolo["codice_alfanumerico"] = lettera_album_selezionato + codice
+    dati_articolo["pacco"] = next(path_articolo.joinpath("pacco")).name
+    dati_articolo["prezzo"] = next(path_articolo.joinpath("prezzo")).name
+    dati_articolo["taglia"] = next(path_articolo.joinpath("taglia")).name
+    dati_articolo["titolo"] = next(path_articolo.joinpath("titolo")).name
+    return dati_articolo
+
+
+# Metodo per avviare il browser, login e cookie
+def avvio_browser():
+    driver = start_browser(controller.sito_vinted)
+    accetta_consensi_cookie(driver)
+    apertura_pagina_login(driver)
+    load_cookies(driver)
+    login(driver)
+    return driver
+
+
+# Metodo per inserire i dati dell'articolo nella pagina di vendita
+def inserimento_dati_articolo_pagina_vendita(driver, dati_articolo):
+    carica_foto_pagina_vendita(driver, dati_articolo["album_foto_path"])
+    carica_titolo_pagina_vendita(driver, dati_articolo["titolo"])
+    carica_descrizione_pagina_vendita(driver, dati_articolo)
+    seleziona_opzione_drop_menu_consigliata_articolo_pagina_vendita(driver, "category", "[id*='catalog-suggestion-']")
+    seleziona_opzione_drop_menu_consigliata_articolo_pagina_vendita(driver, "brand", "[id*='suggested-brand-radio-']")
+    seleziona_opzione_drop_menu_articolo_pagina_vendita(driver, "size", dati_articolo["taglia"])
+    seleziona_opzione_drop_menu_articolo_pagina_vendita(driver, "condition", dati_articolo["condizioni"])
+    seleziona_opzione_drop_menu_consigliata_articolo_pagina_vendita(driver, "color", ".web_ui__Checkbox__button.web_ui__Checkbox__button-left text-top")
+    #seleziona_opzione_drop_menu_articolo_pagina_vendita(driver, "material", dati_articolo["material"]) #TODO or no
+    seleziona_dimensione_pacco_articolo_pagina_vendita(driver, dati_articolo["pacco"])
+    seleziona_prezzo_di_vendita_nuovo_articolo(driver, dati_articolo["prezzo"])
+    click_carica_articolo_pagina_vendita(driver)
+    esito = verifica_click_carica_articolo_pagina_vendita(driver)
+    return esito
+
+
+#Metodo che verifica se il click o l'articolo è stato caricato o è successo qualche errore torna al caricamento nuovo
+# articolo
+def verifica_click_carica_articolo_pagina_vendita(driver):
+    humanizer(2) #TODO - Qui si potrebbe diminuire il tempo per la performance
+    current_url = driver.current_url
+    if current_url == controller.sito_vinted + "/items/new":
+        return False
+    else:
+        return True
+
+
+
+#Metodo per caricare premere il pulsante di carica articolo sulla pagina vendita e che verifica se è stato caricato se
+def click_carica_articolo_pagina_vendita(driver):
+    humanizer(0)
+    elemento = driver.find_element(By.CSS_SELECTOR, "button[data-test-id='upload-form-save-button']")
+    offset_move_and_click_like_human(driver,elemento)
+    humanizer(0)
+
+
+#Metodo per selezionare la dimensione del pacco di destinazione
+#dimensione = {1, 2, 3} una delle precedenti, 3 è il più grande
+def seleziona_dimensione_pacco_articolo_pagina_vendita(driver, dimensione):
+    id_dimensione = "package-size-" + str(dimensione)
+    elemento = driver.find_element(By.ID, id_dimensione)
+    offset_move_and_click_like_human(driver, elemento)
+
+
+# Metodo per selezionare il materiale dell'articolo di vendita
+def seleziona_materiale_articolo_pagina_vendita(driver, materiale):
+    elementi_materiali = selettore_elementi_multipli_pagina_di_vendita(driver, "material")
+    materiale = materiale.lower()
+    for elemento_materiale in elementi_materiali:
+        materiale_trovato = elemento_materiale.text.lower()
+        if materiale_trovato == materiale.lower():
+            azione = ActionChains(driver)
+            azione.move_to_element(elemento_materiale)
+            azione.pause(small_humanizer())
+            azione.click(elemento_materiale)
+            azione.pause(small_humanizer())
+            azione.perform()
+            humanizer(0)
+            return True
+    return False
+
+
+# Metodo per selezionare l'oggetto dalla drop-menu serve per DRY (Don't Repeat Yourself)
+#cosa_cercare = esempio "size", "category"...
+#text_oggetto = Xl, L sono le taglie che abbiamo inserito
+def seleziona_opzione_drop_menu_articolo_pagina_vendita(driver, cosa_cercare , text_oggetto):
+    try:
+        elementi_menu = selettore_elementi_multipli_pagina_di_vendita(driver, cosa_cercare)
+        text_oggetto = text_oggetto.lower()
+        for elemento_menu in elementi_menu:
+            text_trovato = elemento_menu.text.lower()
+            if text_trovato == text_oggetto:
+                azione = ActionChains(driver)
+                azione.move_to_element(elemento_menu)
+                azione.pause(small_humanizer())
+                azione.click(elemento_menu)
+                azione.pause(small_humanizer())
+                azione.perform()
+                humanizer(0)
+                return True
+    except Exception as e: print(e)
+
+#Metodo DRY (Don't Repeat Yourself) per spostarso come un umano su un elemento web passato e cliccarci sopra con un delay
+#tra le azioni
+#TODO def move_and_click_like_human(driver, elemento):
+
+
+#Metodo per spostarsi su un elemento con un piccolo offset e cliccarlo
+def offset_move_and_click_like_human(driver, elemento):
+    small_humanizer()
+    azione = ActionChains(driver)
+    azione.pause(small_humanizer())
+    azione.move_to_element_with_offset(elemento, random.randint(0, 60), random.randint(0, 10))
+    azione.pause(small_humanizer())
+    azione.click(elemento)
+    azione.pause(small_humanizer())
+    azione.perform()
+    small_humanizer()
+
+
+#Questo metodo serve per DRY (Don't Repeat Yourself)
+#cosa_cercare = "category", "size", "material"
+def selettore_elementi_multipli_pagina_di_vendita(driver, cosa_cercare):
+    elemento = driver.find_element(By.ID, cosa_cercare)
+    elementi_trovati = elemento.find_elements(By.CSS_SELECTOR,
+                                              "li.web_ui__Item__item.web_ui__Item__with-divider")
+    return elementi_trovati
+
+
+# Metodo per selezionare la condizione dell'articolo di vendita
+# condizione = 1-5 (intero) in ordine di qualità maggiore
+def seleziona_condizioni_articolo_pagina_vendita(driver, condizione):
+    condizione = int(condizione)
+    elementi_condizioni = selettore_elementi_multipli_pagina_di_vendita(driver, "condition")
+    indice = 5 - condizione
+    if indice < 0 or indice >= len(elementi_condizioni):
+        raise IndexError()
+    elemento_condizione = elementi_condizioni[indice]
+    azione = ActionChains(driver)
+    azione.move_to_element(elemento_condizione)
+    azione.pause(small_humanizer())
+    azione.click(elemento_condizione)
+    azione.pause(small_humanizer())
+    azione.perform()
+
+
+# TODO verificare se è case-sensitive
+def seleziona_taglia_articolo_pagina_vendita(driver, taglia):
+    taglia = taglia.lower()
+    elemento = driver.find_element(By.ID, "size")
+    elementi_taglie = elemento.find_elements(By.CSS_SELECTOR, "li.web_ui__Item__item.web_ui__Item__with-divider")
+    for elemento_taglia in elementi_taglie:
+        taglia_trovata = elemento_taglia.text
+        if taglia_trovata == taglia:
+            azione = ActionChains(driver)
+            azione.move_to_element(elemento_taglia)
+            azione.pause(small_humanizer())
+            azione.click(elemento_taglia)
+            azione.pause(small_humanizer())
+            azione.perform()
+            humanizer(0)
+            return True
+    return False
+
+
+# Metodo per risolvere la ridondanza delle stesse operazioni
+# opzioni_input = esempio:"category" indica l'id della tendina ancora chiusa delle opzioni che compaiono dopo il click
+# css_opzioni_suggerite = "[id*='catalog-suggestion-']" indica il pallino di selezione consigliata da cliccare
+def seleziona_opzione_drop_menu_consigliata_articolo_pagina_vendita(driver, opzione_input, css_opzioni_suggerite):
+    elemento = driver.find_element(By.ID, opzione_input)
+    genitore_elemento = elemento.find_element_by_xpath('..')
+    azione = ActionChains(driver)
+    azione.move_to_element(elemento)
+    azione.pause(medium_random())
+    azione.click(elemento)
+    azione.pause(medium_random())
+    azione.perform()
+    azione.pause(medium_random())
+    # qui troviamo le cose suggerite quando apriamo il menu delle opzioni
+    opzioni_suggerite = genitore_elemento.find_element(By.CSS_SELECTOR, css_opzioni_suggerite)
+    button_opzione = opzioni_suggerite.find_element(By.CLASS_NAME, "web_ui__Radio__button")
+    azione = ActionChains(driver)
+    azione.move_to_element(button_opzione)
+    azione.pause(medium_random())
+    azione.click(button_opzione)
+    azione.pause(medium_random())
+    azione.perform()
+
+
+# TODO da testare, importantissimo per il rinnnovo che il codice sia presente in modo e formato corretto
+# Metodo per caricare la descrizione e il codice del articolo
+def carica_descrizione_pagina_vendita(driver, dati_articolo):
+    elemento = driver.find_element(By.ID, "description")
+    azione = ActionChains(driver)
+    azione.move_to_element(elemento)
+    azione.pause(humanizer(0))
+    azione.click(elemento)
+    azione.pause(humanizer(0))
+    azione.perform()
+    humanizer(0)
+    send_delayed_keys(elemento, dati_articolo["descrizione"] + " " + dati_articolo["codice_alfanumerico"])
+    humanizer(1)
+
+
+# Metodo per selezionare il prezzo di vendita dell'articolo nella pagina di vendita nuovo articolo del sito
+def seleziona_prezzo_di_vendita_nuovo_articolo(driver, prezzo):
+    elemento = driver.find_element(By.ID, "price")  # todo da controllare
+    azione = ActionChains(driver)
+    azione.move_to_element(elemento)
+    azione.pause(humanizer(0))
+    azione.click(elemento)
+    azione.pause(humanizer(0))
+    azione.perform()
+    humanizer(0)
+    elemento.send_keys(prezzo)
+    humanizer(1)
+
+
+# Metodo per caricare il titolo del articolo passato nella pagina di vendita
+def carica_titolo_pagina_vendita(driver, titolo):
+    elemento = driver.find_element(By.ID, "title")
+    send_delayed_keys(elemento, titolo)
+    humanizer(1)
+
+
+# Metodo per selezionare la categoria consigliata da vinted per il nostro articolo
+def seleziona_categoria_standard_pagina_vendita(driver):
+    elemento = driver.find_element(By.ID, "category")
+    genitore_elemento = elemento.find_element_by_xpath('..')
+    azione = ActionChains(driver)
+    azione.move_to_element(elemento)
+    azione.pause(medium_random())
+    azione.click(elemento)
+    azione.pause(medium_random())
+    azione.perform()
+    azione.pause(medium_random())
+    categoria = genitore_elemento.find_element(By.CSS_SELECTOR, "[id*='catalog-suggestion-']")
+    button_categoria = categoria.find_element(By.CLASS_NAME, "web_ui__Radio__button")
+    azione = ActionChains(driver)
+    azione.move_to_element(button_categoria)
+    azione.pause(medium_random())
+    azione.click(button_categoria)
+    azione.pause(medium_random())
+    azione.perform()
+
+
+# Metodo per caricare le foto nella finestra della pagina vendi articolo, si passa il driver e il path delle foto da caricare
+def carica_foto_pagina_vendita(driver, path_foto):
+    # Crea la lista completa dei file (solo immagini, opzionale)
+    file_list = [
+        os.path.join(path_foto, f)
+        for f in os.listdir(path_foto)
+        if os.path.isfile(os.path.join(path_foto, f))
+    ]
+    upload = driver.find_element(By.XPATH, '//span[text()="Carica le foto"]')
+    upload.send_keys(r"\n".join(file_list))
+    attesa_caricamento_elemento(driver, 10, By.CLASS_NAME, "photo-box")
+    # TODO qui ci dovrebbe essere un fallback ^^^^^^^^^^^^^
+
+
+# TODO da testare in qualche modo intelligente, l'offset impostato sembra che clicca sempre sul pulsante vendi, da mettere un fallback di recupero
+# Metodo per aprire la pagina per caricare l'articolo di vendita, perchè funzioni correttamente questo metodo deve
 # essere chiamato da un luogo in cui è presente la foto del profilo e il tasto di vendi subito
 def apertura_pagina_vendita(driver):
     humanizer(0)
@@ -135,8 +364,9 @@ def apertura_pagina_vendita(driver):
     humanizer(0)
     azione.perform()
     humanizer(5)
-    #routine di fallback
-    try: attesa_caricamento_elemento(driver,5, By.ID, "photos")
+    # routine di fallback
+    try:
+        attesa_caricamento_elemento(driver, 5, By.ID, "photos")
     except NoSuchElementException:
         humanizer(0)
         driver.get("https://www.vinted.it/items/new")
@@ -182,8 +412,19 @@ def attesa_caricamento_elemento(driver, tempo, tipo_elemento, nome_elemento, ):
 
 # metodo che non fa nulla per un determinato numero di secondi e ritorna il valore
 def humanizer(offset):
-    ran = random.uniform(0.9 + offset, 1.8 + offset)
+    ran = medium_random()
+    ran += offset
     time.sleep(ran)
+    return ran
+
+
+def medium_random():
+    ran = random.uniform(0.9, 1.8)
+    return ran
+
+
+def small_humanizer():
+    ran = random.uniform(0.3, 0.6)
     return ran
 
 
@@ -196,37 +437,37 @@ def typing_humanizer():
     return ran
 
 
-# Questo metodo serve per accedere alla pagina del login
+# Questo metodo serve per accedere alla pagina del login e se non riesce lancia un eccezione
 def apertura_pagina_login(driver):
     nome_classe = ".web_ui__Button__button.web_ui__Button__outlined.web_ui__Button__small.web_ui__Button__primary.web_ui__Button__truncated"
     try:
         attesa_caricamento_elemento(driver, 5, By.CSS_SELECTOR, nome_classe)
         elemento_accedi = driver.find_element(By.CSS_SELECTOR, nome_classe)
+        azione = ActionChains(driver).move_to_element(elemento_accedi)
+        azione.pause(humanizer(0))
+        azione.click()
+        azione.pause(humanizer(0))
+        azione.perform()
+        nome_classe = "auth-select-type--register-switch"
+        attesa_caricamento_elemento(driver, 5, By.CSS_SELECTOR, f"[data-testid={nome_classe}]")
+        elemento_accedi = driver.find_element(By.CSS_SELECTOR, f"[data-testid={nome_classe}]")
+        azione = ActionChains(driver).move_to_element(elemento_accedi)
+        azione.pause(humanizer(0))
+        azione.click()
+        azione.pause(humanizer(0))
+        azione.perform()
+        humanizer(0)
+        nome_classe = " auth-select-type--login-email"
+        attesa_caricamento_elemento(driver, 5, By.CSS_SELECTOR, f"[data-testid={nome_classe}]")
+        elemento_accedi = driver.find_element(By.CSS_SELECTOR, f"[data-testid={nome_classe}]")
+        azione = ActionChains(driver).move_to_element(elemento_accedi)
+        azione.pause(humanizer(0))
+        azione.click()
+        azione.pause(humanizer(0))
+        azione.perform()
+        humanizer(0)
     except (NoSuchElementException, TimeoutException) as e:
-        return
-    azione = ActionChains(driver).move_to_element(elemento_accedi)
-    azione.pause(humanizer(0))
-    azione.click()
-    azione.pause(humanizer(0))
-    azione.perform()
-    nome_classe = "auth-select-type--register-switch"
-    attesa_caricamento_elemento(driver, 5, By.CSS_SELECTOR, f"[data-testid={nome_classe}]")
-    elemento_accedi = driver.find_element(By.CSS_SELECTOR, f"[data-testid={nome_classe}]")
-    azione = ActionChains(driver).move_to_element(elemento_accedi)
-    azione.pause(humanizer(0))
-    azione.click()
-    azione.pause(humanizer(0))
-    azione.perform()
-    humanizer(0)
-    nome_classe = " auth-select-type--login-email"
-    attesa_caricamento_elemento(driver, 5, By.CSS_SELECTOR, f"[data-testid={nome_classe}]")
-    elemento_accedi = driver.find_element(By.CSS_SELECTOR, f"[data-testid={nome_classe}]")
-    azione = ActionChains(driver).move_to_element(elemento_accedi)
-    azione.pause(humanizer(0))
-    azione.click()
-    azione.pause(humanizer(0))
-    azione.perform()
-    humanizer(0)
+        print(e)
 
 
 # serve per accedere al account specificato dalla finestra che appare dopo aver cliccato di accedere tramite email
@@ -235,11 +476,11 @@ def login(driver):
         attesa_caricamento_elemento(driver, 2, By.ID, "username")
         email_element = driver.find_element(By.ID, "username")
         email_element.clear()
-        send_delayed_keys(email_element, my_email)
+        send_delayed_keys(email_element, controller.my_email)
         humanizer(0)
         password_element = driver.find_element(By.ID, "password")
         password_element.clear()
-        send_delayed_keys(password_element, my_password)
+        send_delayed_keys(password_element, controller.my_password)
         humanizer(0)
         button = driver.find_element(By.XPATH, "//button[.//span[text()='Continua']]")
         azione = ActionChains(driver)
@@ -259,7 +500,7 @@ def login(driver):
 def save_cookies(driver):
     cookies = driver.get_cookies()
     pickle.dump(cookies, open("cookies.pkl", "wb"))
-    driver.get(sito_vinted)
+    driver.get(controller.sito_vinted)
 
 
 # Metodo per cariacare i cookie nel browser
@@ -368,7 +609,7 @@ def scroll(driver, numero_articoli):
 
 
 # Questo metodo serve per aprire il link del articolo passato, controllare se è da eliminare, gestire database locale,
-# eliminarlo come ultima fase
+# eliminarlo online come ultima fase
 def gestione_articolo(driver, link_articolo):
     humanizer(0)
     driver.get(link_articolo)  # Apre l'articolo nella schermata
@@ -378,10 +619,10 @@ def gestione_articolo(driver, link_articolo):
     # passo esito booleano e se True apportare le modifiche
     if esito_da_cancellare:
         codice_articolo = recupera_codice_alfanumerico(driver)
-        # salva_info_articolo_off(driver, codice_articolo)# non lo salviamo è complicato web->pc
+        #salva_info_articolo_off(driver, codice_articolo)# non lo salviamo è complicato web->pc
         humanizer(0)
         cancella_articolo_online(driver)
-        scadenza_articolo(codice_articolo)
+        scadenza_articolo_database(codice_articolo)
         cambia_album(codice_articolo)
     else:
         driver.back()
@@ -396,11 +637,11 @@ def cambia_album(codice):
 # Metodo per recuperare lo stato dell'articolo online e salvarlo nella sua cartella offline per un eventuale rinnovo futuro
 def salva_info_articolo_off(driver, codice_articolo):
     # TODO
-    articolo = ArticoloVin()
+    #articolo = ArticoloVin()
     attributi_da_settare = []
     # titolo - ok class - driver.find_elements(By.XPATH,"//*[@class='web_ui__Text__text web_ui__Text__title web_ui__Text__left']")
     # setattr(articolo, "")
-    breadcrumb = driver.find_element(By.CSS_SELECTOR, ".breadcrumbs.breadcrumbs--truncated")
+    #breadcrumb = driver.find_element(By.CSS_SELECTOR, ".breadcrumbs.breadcrumbs--truncated")
 
 
 def recupero_info_da_sidebar_articolo(web_element):
@@ -584,7 +825,7 @@ def apertura_articolo_nuova_finestra(driver, articolo):
 # Metodo per controllare gli articoli
 def articolo_data_scaduta(driver):
     codice_articolo = recupera_codice_alfanumerico(driver)
-    scadenza_articolo(codice_articolo)
+    scadenza_articolo_database(codice_articolo)
     pass
 
 
@@ -595,16 +836,15 @@ def cancella_articolo_online(driver):
         button = driver.find_element(By.XPATH, "//button[.//span[text()='Cancella']]")
         azione = ActionChains(driver)
         azione.move_to_element(button)
-        humanizer(0)
         azione.perform()
-        humanizer(0)
+        azione.pause(humanizer(0))
         attesa_caricamento_elemento(driver, 5, By.XPATH, "//button[.//span[text()='Conferma e cancella']]")
         button = driver.find_element(By.XPATH, "//button[.//span[text()='Conferma e cancella']]")
-        humanizer(0)
+        azione.pause(humanizer(0))
         azione.move_to_element(button)
-        humanizer(0)
+        azione.pause(humanizer(0))
         azione.perform()
-        humanizer(0)
+        azione.pause(humanizer(0))
         azione.perform()
     except Exception:
         return Exception
@@ -628,7 +868,17 @@ def recupera_codice_alfanumerico(driver):
         return 0
 
 
-# TODO questo metodo non funziona
+def performa_click(driver, oggetto):
+    humanizer(0)
+    azione = ActionChains(driver).move_to_element(oggetto)
+    azione.pause(humanizer(0))
+    azione.click()
+    azione.pause(humanizer(0))
+    azione.perform()
+    humanizer(0)
+
+
+@DeprecationWarning
 # Metodo per reuperare il codice del articolo tramite combinazione di hashtag
 def recupera_codice_hashtag(driver):
     # #Vinteditalia #Secondamano #Modasostenibile #Vestiti #Moda #Vintage #Mango #Accessori #Italia #Italy
@@ -640,26 +890,18 @@ def recupera_codice_hashtag(driver):
 
 
 # Metodo per spostarsi su un oggetto e cliccarlo, bisogna passare il nome del oggetto per argomento
-def performa_click(driver, oggetto):
-    humanizer(0)
-    azione = ActionChains(driver).move_to_element(oggetto)
-    azione.pause(humanizer(0))
-    azione.click()
-    azione.pause(humanizer(0))
-    azione.perform()
-    humanizer(0)
 
 
 # Metodo che sposta la cartella del prodotto tramite il nome/codice del articolo, la cartella avrà come nome il codice del articolo
-def scadenza_articolo(codice):
-    Database_locale.sposta_dir_articolo(pathlib.Path(path_caricati, codice[1:]),
-                                        pathlib.Path(path_da_caricare, codice[1:]))
+def scadenza_articolo_database(codice):
+    Database_locale.sposta_dir_articolo(pathlib.Path(controller.path_caricati, codice[1:]),
+                                        pathlib.Path(controller.path_da_caricare, codice[1:]))
 
 
 # Metodo che sposta la cartella del prodotto tramite il nome/codice del articolo, la cartella avrà come nome il codice del articolo
-def rinnovo_articolo(codice):
-    Database_locale.sposta_dir_articolo(pathlib.Path(path_da_caricare, codice[1:]),
-                                        pathlib.Path(path_caricati, codice[1:]))
+def rinnovo_articolo_database(codice):
+    Database_locale.sposta_dir_articolo(pathlib.Path(controller.path_da_caricare, codice[1:]),
+                                        pathlib.Path(controller.path_caricati, codice[1:]))
 
 
 def diagnosi():
@@ -670,7 +912,7 @@ def diagnosi():
     # driver = webdriver.Chrome(service=service, options=opts)
     driver = uc.Chrome(options=opts)
 
-    url = sito_vinted
+    url = controller.sito_vinted
     # url =
     driver.get(url)
     time.sleep(2)

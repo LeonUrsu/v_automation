@@ -1,41 +1,35 @@
 # Controller del programma
-import os
-
+from _pytest import pathlib
 import model
 import view
-from model import cancella_articolo_online
+
+# variabili globali----------------------------------------------------------------------------------------
+#TODO i valori di setup dovrebbero essere posizionati in un luogo differente non hard-coded
+my_email = "leonardovinted95@gmail.com"
+my_password = "3gigio3leo*"
+driver_name = "chromedriver.exe"
+sito_vinted = "https://www.vinted.it/"
+cartella_caricati = "CARICATI"
+cartella_da_caricare = "DA CARICARE"
+path_caricati = pathlib.Path().cwd().joinpath(cartella_caricati)
+path_da_caricare = pathlib.Path().cwd().joinpath(cartella_da_caricare)
 
 
-# Metodo pricipale del controller per avviare il programma:
+# Metodo principale del controller per avviare il programma:
 def avvio_programma_controller():
-    """
-    print(" 1 : rinnova gli articoli")
-    print("  : carica nuovi articoli")
-    #print(" 3 : cancella tutti gli articoli")
-    #print(" 4 : cancella articolo con codice")
-    print(" e : termina il programma")
-    """
-    view.avvio_programma()
-
     while True:
-        input_utente = view.opzioni_di_avvio()
-        if input_utente == "1":
+        input_utente =  view.avvio_programma()
+        if input_utente == "1": #rinnova gli articoli
             # model.processo_rinnovo_articoli()
-            print("rinnovo degli articoli")
+            print("opzione non disponibile")
+        elif input_utente == "2": #carica nuovi articoli
+            #model.processo_carica_articoli_online()
+            print("opzione non disponibile")
+        elif input_utente == "3": #cancella tutti gli articoli
+            print("opzione non disponibile")
+        elif input_utente == "4": #cancella articolo con codice
+            print("opzione non disponibile")
         elif input_utente == "e":
             return view.fine_programma()
         else:
             view.errore_input()
-# Metodo per caricare gli articoli gli articoli dal locale al sito web, bisonga seguire una sintassi ben definita,
-# schema cartelle
-# DA CARICARE/articolo/foto/now a
-# DA CARICARE/articolo/foto/a #primo album di foto
-# DA CARICARE/articolo/foto/b #secondo album di foto
-# DA CARICARE/articolo/titolo/titolo_articolo
-# DA CARICARE/articolo/prezzo/prezzo_articolo
-# DA CARICARE/articolo/brand/brand_articolo
-# DA CARICARE/articolo/taglia/taglia_articolo
-# DA CARICARE/articolo/condizioni/condizioni_articolo
-# DA CARICARE/articolo/colore/colore_articolo
-# DA CARICARE/articolo/descrizione/descrizione.txt
-# DA CARICARE/articolo/pacco/pacco.txt

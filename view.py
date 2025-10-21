@@ -65,3 +65,8 @@ def errore_input():
 
 def stampa_opzioni():
     return opzioni_di_avvio()
+
+
+def articolo_non_inserito_online(codice):
+    print(f"Attenzione articolo - {codice} - non inserito online")
+
