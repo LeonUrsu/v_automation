@@ -16,6 +16,7 @@ import time
 import Database_locale
 import controller
 
+
 # -----------------------------------------------------------------------------------------------------------------------
 
 # TODO check versioni chromedriver e chrome
@@ -45,7 +46,6 @@ import controller
 # TODO IDEA fare che la data dell'oggetto non viene letta dal sito ma viene salvata in locale durante il caricamento dell'oggetto
 
 
-
 # QUESTO é IL METODO PRINCIPALE DELLO SCRIPT
 def processo_rinnovo_articoli():
     try:
@@ -53,7 +53,7 @@ def processo_rinnovo_articoli():
         apertura_pagina_profilo(driver, "https://www.vinted.it/member/168504727")
         clicca_articoli_attivi(driver)
         numero_articoli = conteggio_articoli_profilo(driver)  # TODO da controllare/testare
-        individuazione_articoli(driver, numero_articoli)
+        iterazione_articoli_profilo_online(driver, numero_articoli)
         processo_carica_articoli_online()
         print("Resoconto: SUCCESSO")
         time.sleep(20)
@@ -118,8 +118,9 @@ def inserimento_dati_articolo_pagina_vendita(driver, dati_articolo):
     seleziona_opzione_drop_menu_consigliata_articolo_pagina_vendita(driver, "brand", "[id*='suggested-brand-radio-']")
     seleziona_opzione_drop_menu_articolo_pagina_vendita(driver, "size", dati_articolo["taglia"])
     seleziona_opzione_drop_menu_articolo_pagina_vendita(driver, "condition", dati_articolo["condizioni"])
-    seleziona_opzione_drop_menu_consigliata_articolo_pagina_vendita(driver, "color", ".web_ui__Checkbox__button.web_ui__Checkbox__button-left text-top")
-    #seleziona_opzione_drop_menu_articolo_pagina_vendita(driver, "material", dati_articolo["material"]) #TODO or no
+    seleziona_opzione_drop_menu_consigliata_articolo_pagina_vendita(driver, "color",
+                                                                    ".web_ui__Checkbox__button.web_ui__Checkbox__button-left text-top")
+    # seleziona_opzione_drop_menu_articolo_pagina_vendita(driver, "material", dati_articolo["material"]) #TODO or no
     seleziona_dimensione_pacco_articolo_pagina_vendita(driver, dati_articolo["pacco"])
     seleziona_prezzo_di_vendita_nuovo_articolo(driver, dati_articolo["prezzo"])
     click_carica_articolo_pagina_vendita(driver)
@@ -127,10 +128,10 @@ def inserimento_dati_articolo_pagina_vendita(driver, dati_articolo):
     return esito
 
 
-#Metodo che verifica se il click o l'articolo è stato caricato o è successo qualche errore torna al caricamento nuovo
+# Metodo che verifica se il click o l'articolo è stato caricato o è successo qualche errore torna al caricamento nuovo
 # articolo
 def verifica_click_carica_articolo_pagina_vendita(driver):
-    humanizer(2) #TODO - Qui si potrebbe diminuire il tempo per la performance
+    humanizer(2)  # TODO - Qui si potrebbe diminuire il tempo per la performance
     current_url = driver.current_url
     if current_url == controller.sito_vinted + "/items/new":
         return False
@@ -138,17 +139,16 @@ def verifica_click_carica_articolo_pagina_vendita(driver):
         return True
 
 
-
-#Metodo per caricare premere il pulsante di carica articolo sulla pagina vendita e che verifica se è stato caricato se
+# Metodo per caricare premere il pulsante di carica articolo sulla pagina vendita e che verifica se è stato caricato se
 def click_carica_articolo_pagina_vendita(driver):
     humanizer(0)
     elemento = driver.find_element(By.CSS_SELECTOR, "button[data-test-id='upload-form-save-button']")
-    offset_move_and_click_like_human(driver,elemento)
+    offset_move_and_click_like_human(driver, elemento)
     humanizer(0)
 
 
-#Metodo per selezionare la dimensione del pacco di destinazione
-#dimensione = {1, 2, 3} una delle precedenti, 3 è il più grande
+# Metodo per selezionare la dimensione del pacco di destinazione
+# dimensione = {1, 2, 3} una delle precedenti, 3 è il più grande
 def seleziona_dimensione_pacco_articolo_pagina_vendita(driver, dimensione):
     id_dimensione = "package-size-" + str(dimensione)
     elemento = driver.find_element(By.ID, id_dimensione)
@@ -174,9 +174,9 @@ def seleziona_materiale_articolo_pagina_vendita(driver, materiale):
 
 
 # Metodo per selezionare l'oggetto dalla drop-menu serve per DRY (Don't Repeat Yourself)
-#cosa_cercare = esempio "size", "category"...
-#text_oggetto = Xl, L sono le taglie che abbiamo inserito
-def seleziona_opzione_drop_menu_articolo_pagina_vendita(driver, cosa_cercare , text_oggetto):
+# cosa_cercare = esempio "size", "category"...
+# text_oggetto = Xl, L sono le taglie che abbiamo inserito
+def seleziona_opzione_drop_menu_articolo_pagina_vendita(driver, cosa_cercare, text_oggetto):
     try:
         elementi_menu = selettore_elementi_multipli_pagina_di_vendita(driver, cosa_cercare)
         text_oggetto = text_oggetto.lower()
@@ -191,14 +191,16 @@ def seleziona_opzione_drop_menu_articolo_pagina_vendita(driver, cosa_cercare , t
                 azione.perform()
                 humanizer(0)
                 return True
-    except Exception as e: print(e)
-
-#Metodo DRY (Don't Repeat Yourself) per spostarso come un umano su un elemento web passato e cliccarci sopra con un delay
-#tra le azioni
-#TODO def move_and_click_like_human(driver, elemento):
+    except Exception as e:
+        print(e)
 
 
-#Metodo per spostarsi su un elemento con un piccolo offset e cliccarlo
+# Metodo DRY (Don't Repeat Yourself) per spostarso come un umano su un elemento web passato e cliccarci sopra con un delay
+# tra le azioni
+# TODO def move_and_click_like_human(driver, elemento):
+
+
+# Metodo per spostarsi su un elemento con un piccolo offset e cliccarlo
 def offset_move_and_click_like_human(driver, elemento):
     small_humanizer()
     azione = ActionChains(driver)
@@ -211,8 +213,8 @@ def offset_move_and_click_like_human(driver, elemento):
     small_humanizer()
 
 
-#Questo metodo serve per DRY (Don't Repeat Yourself)
-#cosa_cercare = "category", "size", "material"
+# Questo metodo serve per DRY (Don't Repeat Yourself)
+# cosa_cercare = "category", "size", "material"
 def selettore_elementi_multipli_pagina_di_vendita(driver, cosa_cercare):
     elemento = driver.find_element(By.ID, cosa_cercare)
     elementi_trovati = elemento.find_elements(By.CSS_SELECTOR,
@@ -560,25 +562,26 @@ def conteggio_articoli_profilo(driver):
     return numero
 
 
-# Metodo per Iterare gli articoli, controllare le date e fare tutto quello che serve per caricare o scaricare gli oggetti
-# numero= oggetti da iterare
-def individuazione_articoli(driver, numero_articoli):
-    scroll(driver, numero_articoli)
+# Metodo che itera gli articoli presenti nella pagina profilo del sito
+def iterazione_articoli_profilo_online(driver, numero_articoli):
+    scrolla_fondo_pagina_versione_2(driver)
     humanizer(0)
-    articoli = driver.find_elements(By.CSS_SELECTOR,
-                                    ".u-position-relative.u-min-height-none.u-flex-auto.new-item-box__image-container")
-    array_link_articoli = recupera_link_articoli(articoli, numero_articoli)
+    elemento = driver.find_element(By.ID, "tabs")
+    genitore = elemento.find_element(By.XPATH, "..")
+    articoli = genitore.find_elements(By.CSS_SELECTOR, "[data-testid='grid-item']")
+    array_link_articoli = recupera_link_articoli_versione_2(articoli)
     lunghezza_array = len(articoli)
     contatore = 0
     try:
-        while contatore < lunghezza_array:
+        for articolo in array_link_articoli:
             humanizer(0)
-            gestione_articolo(driver, array_link_articoli[contatore])  # TODO riguardare logic
+            esamina_stato_articolo(driver, articolo)
             humanizer(0)
     except Exception:
         pass
 
 
+@DeprecationWarning
 # Metodo per recuperare tutti i link degli articoli passati come array di webElements e che li ritorna come array di str
 def recupera_link_articoli(articoli, numero_articoli):
     contatore = numero_articoli
@@ -593,9 +596,21 @@ def recupera_link_articoli(articoli, numero_articoli):
     return array_link_articoli
 
 
-# TODO - Warning - questo metodo potrebbe non scrollare fino in fondo
+# Metodo per recuperare tutti i link degli articoli passati come array di webElements e che li ritorna come array di str
+def recupera_link_articoli_versione_2(articoli):
+    array_link_articoli = []
+    for item in array_link_articoli:
+        try:
+            link = item.find_element(By.CSS_SELECTOR, "a.new-item-box__overlay")
+            articoli.append(link.get_attribute("href"))
+        except:
+            pass  # se non c'è un link, ignora
+    return array_link_articoli
+
+
+@DeprecationWarning
 # Metodo per scrollare la lista degli articoli fino in fondo
-def scroll(driver, numero_articoli):
+def scrolla_fondo_pagina(driver, numero_articoli):
     humanizer(0)
     volte = int(numero_articoli / 5)
     quanto_y = 450 + int(random.uniform(51, 120))
@@ -603,23 +618,40 @@ def scroll(driver, numero_articoli):
     azione = ActionChains(driver)
     for i in range(volte):
         azione.scroll_by_amount(0, quanto_y)
+        azione.pause(small_humanizer())
         azione.perform()
-        humanizer(-0.5)
     humanizer(0)
+
+
+# Tested
+# Metodo per scrollare la lista degli articoli fino in fondo
+def scrolla_fondo_pagina_versione_2(driver):
+    small_humanizer()
+    position_before = 0
+    azione = ActionChains(driver)
+    while True:
+        quanto_y = 450 + int(random.uniform(51, 120))
+        azione.pause(small_humanizer())
+        azione.scroll_by_amount(0, quanto_y)
+        azione.perform()
+        position_now = driver.execute_script("return window.pageYOffset + window.innerHeight")
+        if position_now == position_before:
+            small_humanizer()
+            return True
+        else:
+            position_before = position_now
 
 
 # Questo metodo serve per aprire il link del articolo passato, controllare se è da eliminare, gestire database locale,
 # eliminarlo online come ultima fase
-def gestione_articolo(driver, link_articolo):
-    humanizer(0)
+def esamina_stato_articolo(driver, link_articolo):
+    small_humanizer()
     driver.get(link_articolo)  # Apre l'articolo nella schermata
-    time.sleep(2)
-    humanizer(0)
-    esito_da_cancellare = controllo_eliminazione_articolo(driver)
-    # passo esito booleano e se True apportare le modifiche
-    if esito_da_cancellare:
-        codice_articolo = recupera_codice_alfanumerico(driver)
-        #salva_info_articolo_off(driver, codice_articolo)# non lo salviamo è complicato web->pc
+    attesa_caricamento_elemento(driver, 10, By.ID, "sidebar")
+    esito_di_cancellazione = controllo_eliminazione_articolo(driver)
+    if esito_di_cancellazione:
+        codice_articolo = recupera_codice_alfanumerico(driver)#TODO controllare
+        #salva_info_articolo_off(driver, codice_articolo)# non lo salviamo perchè è complicato dal web al pc è induce possibili errori
         humanizer(0)
         cancella_articolo_online(driver)
         scadenza_articolo_database(codice_articolo)
@@ -637,11 +669,11 @@ def cambia_album(codice):
 # Metodo per recuperare lo stato dell'articolo online e salvarlo nella sua cartella offline per un eventuale rinnovo futuro
 def salva_info_articolo_off(driver, codice_articolo):
     # TODO
-    #articolo = ArticoloVin()
+    # articolo = ArticoloVin()
     attributi_da_settare = []
     # titolo - ok class - driver.find_elements(By.XPATH,"//*[@class='web_ui__Text__text web_ui__Text__title web_ui__Text__left']")
     # setattr(articolo, "")
-    #breadcrumb = driver.find_element(By.CSS_SELECTOR, ".breadcrumbs.breadcrumbs--truncated")
+    # breadcrumb = driver.find_element(By.CSS_SELECTOR, ".breadcrumbs.breadcrumbs--truncated")
 
 
 def recupero_info_da_sidebar_articolo(web_element):
@@ -747,14 +779,16 @@ def indietro_pagina(driver, esito_da_cancellare):
         driver.back()
 
 
+#testato
 # Metodo per controllare la data del articolo e vedere se dobbiamo eliminarlo oppure no
 # return True se è da eliminare
 def controllo_eliminazione_articolo(driver):
     caricato_span = WebDriverWait(driver, 10).until(
-        EC.presence_of_element_located((By.XPATH, "//span[normalize-space(text())='Caricato']")))
-    upload_date_elem = caricato_span.find_element(By.XPATH, "../../div[@itemprop='upload_date']/span")
-    upload_date = upload_date_elem.text
-    eta_articolo = ore_trascorse(upload_date)
+        EC.presence_of_element_located((By.ID, "sidebar")))
+    label = caricato_span.find_element(By.XPATH, ".//span[normalize-space(text())='Caricato']")
+    tempo_element = label.find_element(By.XPATH, "../../div/span[contains(@class,'web_ui__Text__bold')]")
+    tempo = tempo_element.text.strip()
+    eta_articolo = ore_trascorse_formato_vinted(tempo)
     if eta_articolo > 72:
         return True
     else:
@@ -762,7 +796,7 @@ def controllo_eliminazione_articolo(driver):
 
 
 # Metodo per convertire il formato del sito web in ore trascorse passando il formato in stringa
-def ore_trascorse(testo: str) -> float:
+def ore_trascorse_formato_vinted(testo: str) -> float:
     testo = testo.strip().lower()
     parole_numeri = {
         "un": 1, "una": 1, "un'": 1, "uno": 1,
