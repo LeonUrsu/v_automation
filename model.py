@@ -52,8 +52,8 @@ def processo_rinnovo_articoli():
         driver = avvio_browser()
         apertura_pagina_profilo(driver, "https://www.vinted.it/member/168504727")
         clicca_articoli_attivi(driver)
-        numero_articoli = conteggio_articoli_profilo(driver)  # TODO da controllare/testare
-        iterazione_articoli_profilo_online(driver, numero_articoli)
+        numero_articoli = conteggio_articoli_profilo(driver)
+        iterazione_articoli_profilo_online(driver, numero_articoli) # TODO da controllare/testare
         processo_carica_articoli_online()
         print("Resoconto: SUCCESSO")
         time.sleep(20)
@@ -676,6 +676,12 @@ def salva_info_articolo_off(driver, codice_articolo):
     # breadcrumb = driver.find_element(By.CSS_SELECTOR, ".breadcrumbs.breadcrumbs--truncated")
 
 
+#Metodo per recuperare la sidebar dal profilo personale
+def recupera_sidebar_da_pagina_profilo(driver):
+    sidebar = driver.find_element(By.ID, "sidebar")
+    return sidebar
+
+
 def recupero_info_da_sidebar_articolo(web_element):
     # Titolo
     try:
@@ -884,22 +890,31 @@ def cancella_articolo_online(driver):
         return Exception
 
 
-# Recupera codice alfanumerico dal articolo il codice può avere una "a" o "b" d'avanti al numero del articolo e indica
-# quale album di fotografie è stato utilizzato
+#Passed
+#TODO ma si comporta in modo strano alcune volte ha fallito senza cambiare nulla, non caricava il codice del
+# del articolo anche se era presente nell html di prova
+#Recupera codice alfanumerico dal articolo il codice può avere una "a" o "b" d'avanti al numero del articolo e indica
+#quale album di fotografie è stato utilizzato
 def recupera_codice_alfanumerico(driver):
-    desc_element = driver.find_element(
+    sidebar = recupera_sidebar_da_pagina_profilo(driver)
+    desc_element = sidebar.find_element(
         By.CSS_SELECTOR,
-        "span.web_ui__Text__text.web_ui__Text__body.web_ui__Text__left.web_ui__Text__format"
+        ".web_ui__Text__text.web_ui__Text__body.web_ui__Text__left.web_ui__Text__format span"
     )
+    #elemento = sidebar.find_element(By.CSS_SELECTOR, ".nome-classe span")
     desc_text = desc_element.text
     # Cerca il codice alfanumerico tipo 'a1921242' o 'b4321'
     match = re.search(r'\b[ab]\d{1,7}\b', desc_text)
     # Recupera il codice trovato
-    if match:
+    if match is not None:
         codice = match.group(0)
         return codice
     else:
         return 0
+
+
+
+
 
 
 def performa_click(driver, oggetto):

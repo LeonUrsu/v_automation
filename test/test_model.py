@@ -25,6 +25,7 @@ def test_carica_foto_pagina_vendita():
     path_foto = r"C:\Users\Leon\v_bot_selenium\test\DA CARICARE\12213\foto\a"
     model.carica_foto_pagina_vendita(driver, path_foto)
     elemento = driver.find_element(By.CLASS_NAME, "photo-box")
+    driver.close()
     assert elemento.is_displayed() == True
 
 #Metodo che testa se una pagina con 205 articoli viene scrollata fino in fondo
@@ -34,6 +35,7 @@ def test_scrolla_fondo_pagina_versione_2():
     driver.maximize_window()
     model.humanizer(6)
     esito = model.scrolla_fondo_pagina_versione_2(driver)
+    driver.close()
     assert esito == True
 
 def test_print_path():
@@ -48,6 +50,7 @@ def test_esito_di_cancellazione():
     driver.maximize_window()
     small_humanizer()
     esito = model.controllo_eliminazione_articolo(driver)
+    driver.close()
     assert esito == True
 
 
@@ -59,4 +62,7 @@ def test_recupera_codice_alfanumerico():
     driver.maximize_window()
     small_humanizer()
     esito = model.recupera_codice_alfanumerico(driver)
-    assert esito != 0
+    driver.close()
+    assert esito == "b1921242" # è l'articolo che è stato salvato nel html
+
+
