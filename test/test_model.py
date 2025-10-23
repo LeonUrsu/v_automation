@@ -13,8 +13,10 @@ pagina_articolo = str(pathlib.Path.cwd().joinpath("test").joinpath("pagina artic
 pagina_articolo_content = str(pathlib.Path.cwd().joinpath("test").joinpath("pagina articolo content.html"))
 sidebar_articolo = str(pathlib.Path.cwd().joinpath("test").joinpath("sidebar pantaloni.html"))
 articoli_utente = str(pathlib.Path.cwd().joinpath("test").joinpath("articoli utente.html"))
+articoli_utente_tabs = str(pathlib.Path.cwd().joinpath("test").joinpath("articoli utente tabs.html"))
 vendi_articolo = str(pathlib.Path.cwd().joinpath("test").joinpath("vendi un articolo.html"))
-pagina_venditore_casuale = str(pathlib.Path.cwd().joinpath("test").joinpath("framboise614 - member profile _ Vinted.html"))
+pagina_venditore_casuale = str(pathlib.Path.cwd().joinpath("test").joinpath(
+    "dfdanilo23 - tabs - member profile _ Vinted.html"))
 
  #Metodo per testare se foto vengono caricate su vendi articolo
 def test_carica_foto_pagina_vendita():
@@ -66,3 +68,11 @@ def test_recupera_codice_alfanumerico():
     assert esito == "b1921242" # è l'articolo che è stato salvato nel html
 
 
+#
+def test_iterazione_articoli_profilo_online():
+    driver = uc.Chrome()
+    driver.get(articoli_utente_tabs)
+    driver.maximize_window()
+    small_humanizer()
+    esito = model.iterazione_articoli_profilo_online(driver)
+    driver.close()

@@ -15,6 +15,7 @@ import time
 
 import Database_locale
 import controller
+from controller import sito_vinted
 
 
 # -----------------------------------------------------------------------------------------------------------------------
@@ -53,7 +54,7 @@ def processo_rinnovo_articoli():
         apertura_pagina_profilo(driver, "https://www.vinted.it/member/168504727")
         clicca_articoli_attivi(driver)
         numero_articoli = conteggio_articoli_profilo(driver)
-        iterazione_articoli_profilo_online(driver, numero_articoli) # TODO da controllare/testare
+        iterazione_articoli_profilo_online(driver) # TODO da controllare/testare
         processo_carica_articoli_online()
         print("Resoconto: SUCCESSO")
         time.sleep(20)
@@ -563,19 +564,17 @@ def conteggio_articoli_profilo(driver):
 
 
 # Metodo che itera gli articoli presenti nella pagina profilo del sito
-def iterazione_articoli_profilo_online(driver, numero_articoli):
+def iterazione_articoli_profilo_online(driver):
     scrolla_fondo_pagina_versione_2(driver)
     humanizer(0)
     elemento = driver.find_element(By.ID, "tabs")
     genitore = elemento.find_element(By.XPATH, "..")
     articoli = genitore.find_elements(By.CSS_SELECTOR, "[data-testid='grid-item']")
     array_link_articoli = recupera_link_articoli_versione_2(articoli)
-    lunghezza_array = len(articoli)
-    contatore = 0
     try:
-        for articolo in array_link_articoli:
+        for link in array_link_articoli:
             humanizer(0)
-            esamina_stato_articolo(driver, articolo)
+            esamina_stato_articolo(driver, link)
             humanizer(0)
     except Exception:
         pass
@@ -595,14 +594,16 @@ def recupera_link_articoli(articoli, numero_articoli):
         return array_link_articoli
     return array_link_articoli
 
-
+#TESTED
 # Metodo per recuperare tutti i link degli articoli passati come array di webElements e che li ritorna come array di str
 def recupera_link_articoli_versione_2(articoli):
     array_link_articoli = []
-    for item in array_link_articoli:
+    for item in articoli:# TODO qui non recupera gli href
         try:
-            link = item.find_element(By.CSS_SELECTOR, "a.new-item-box__overlay")
-            articoli.append(link.get_attribute("href"))
+            link_element = item.find_element(By.CSS_SELECTOR, "a[data-testid$='--overlay-link']")
+            href = link_element.get_attribute("href")
+            link = sito_vinted.join(href)
+            array_link_articoli.append(link)
         except:
             pass  # se non c'è un link, ignora
     return array_link_articoli
@@ -648,9 +649,9 @@ def esamina_stato_articolo(driver, link_articolo):
     small_humanizer()
     driver.get(link_articolo)  # Apre l'articolo nella schermata
     attesa_caricamento_elemento(driver, 10, By.ID, "sidebar")
-    esito_di_cancellazione = controllo_eliminazione_articolo(driver)
+    esito_di_cancellazione = controllo_eliminazione_articolo(driver)#TODO controllare
     if esito_di_cancellazione:
-        codice_articolo = recupera_codice_alfanumerico(driver)#TODO controllare
+        codice_articolo = recupera_codice_alfanumerico(driver)
         #salva_info_articolo_off(driver, codice_articolo)# non lo salviamo perchè è complicato dal web al pc è induce possibili errori
         humanizer(0)
         cancella_articolo_online(driver)

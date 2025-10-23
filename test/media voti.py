@@ -21,7 +21,8 @@ totale_scartato = (geometria + analisi2  + economia + fisica1 + fisica2  + algeb
 
 media_totale = (totale / 126)
 media_totale_scartato = (totale_scartato / 106)
-pagina_venditore_casuale = str(pathlib.Path.cwd().joinpath("test").joinpath("framboise614 - member profile _ Vinted.html"))
+pagina_venditore_casuale = str(pathlib.Path.cwd().joinpath("test").joinpath(
+    "dfdanilo23 - tabs - member profile _ Vinted.html"))
 
 def calcolo(tot):
     return (tot*110)/30
