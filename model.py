@@ -14,12 +14,10 @@ from selenium.webdriver.support import expected_conditions as EC
 import time
 
 import Database_locale
-import controller
-from controller import sito_vinted
+import config
 
 
 # -----------------------------------------------------------------------------------------------------------------------
-
 # TODO check versioni chromedriver e chrome
 
 # TODO aggiungere tempi di attesa per rendere il programma random
@@ -46,34 +44,34 @@ from controller import sito_vinted
 
 # TODO IDEA fare che la data dell'oggetto non viene letta dal sito ma viene salvata in locale durante il caricamento dell'oggetto
 
+#TODO verificare se l'album viene cambiato correttamente durante le interazioni
 
-# QUESTO é IL METODO PRINCIPALE DELLO SCRIPT
+
 def processo_rinnovo_articoli():
     try:
-        driver = avvio_browser()
+        driver = avvio_browser(config)
         apertura_pagina_profilo(driver, "https://www.vinted.it/member/168504727")
         clicca_articoli_attivi(driver)
-        numero_articoli = conteggio_articoli_profilo(driver)
-        iterazione_articoli_profilo_online(driver) # TODO da controllare/testare
-        processo_carica_articoli_online()
+        iterazione_articoli_profilo_online(driver)
+        driver.close()
+        processo_carica_articoli_online(config)
         print("Resoconto: SUCCESSO")
-        time.sleep(20)
     except Exception:
         print("Resoconto: ERRORE")
     print("- - - Software Terminato - - -")
 
 
 # Metodo per caricare articoli sun profilo del sito web, dalla cartella DA CARICARE
-def processo_carica_articoli_online():
-    driver = avvio_browser()
-    codici_articoli_da_caricare = [item.name for item in controller.path_da_caricare.iterdir() if item.is_dir()]
+def processo_carica_articoli_online(config):
+    driver = avvio_browser(config)
+    codici_articoli_da_caricare = [item.name for item in config.path_da_caricare.iterdir() if item.is_dir()]
     for codice in codici_articoli_da_caricare:
         try:
-            dati_articolo = creazione_dizionario_dati_articolo(controller.path_da_caricare, codice)
+            dati_articolo = creazione_dizionario_dati_articolo(config.path_da_caricare.joinpath(codice), codice)
             apertura_pagina_vendita(driver)
-            esito = inserimento_dati_articolo_pagina_vendita(driver, dati_articolo)
+            esito = inserimento_dati_articolo_pagina_vendita(driver, dati_articolo) #TODO DA CONTROLLARE ACCURATAMENTE
             if esito:
-                scadenza_articolo_database(codice)
+                rinnovo_articolo_database(config, codice)
             else:
                 raise Exception
         except Exception:
@@ -82,27 +80,30 @@ def processo_carica_articoli_online():
 
 # Metodo per creare un dizionario con i dati dell'articolo dai dati disponibili nei path
 # questo metodo deve essere rivisto se cambiamo il modo di archiviazione dell'articolo offline
-def creazione_dizionario_dati_articolo(da_caricare_path, codice):
-    path_articolo = da_caricare_path.joinpath(codice)
+def creazione_dizionario_dati_articolo(path_articolo, codice):
     dati_articolo = {}
-    dati_articolo["titolo"] = next(path_articolo.joinpath("titolo")).name
-    dati_articolo["colore"] = next(path_articolo.joinpath("colore")).name
-    dati_articolo["condizioni"] = next(path_articolo.joinpath("condizioni")).name
-    dati_articolo["descrizione"] = next(path_articolo.joinpath("descrizione")).name
-    cartelle_foto = sorted((path_articolo / "foto").iterdir())  # elenco delle sottocartelle ordinate
-    lettera_album_selezionato = cartelle_foto[2].name.replace("is_", "")
+    dati_articolo["titolo"] = next((d for d in path_articolo.joinpath("titolo").iterdir() if d.is_dir()), None).name
+    dati_articolo["colore"] = next((d for d in path_articolo.joinpath("colore").iterdir() if d.is_dir()), None).name
+    dati_articolo["condizioni"] = next((d for d in path_articolo.joinpath("condizioni").iterdir() if d.is_dir()), None).name
+    dati_articolo["descrizione"] = ""
+    with open(path_articolo.joinpath("descrizione").joinpath("descrizione.txt"), encoding='utf8') as f:
+        dati_articolo["descrizione"] = f.read()
+    lettera_album_selezionato = ""
+    if path_articolo.joinpath("foto").joinpath("is_a").is_dir():
+        lettera_album_selezionato = "a"
+    elif path_articolo.joinpath("foto").joinpath("is_b").is_dir():
+        lettera_album_selezionato = "b"
     dati_articolo["album_foto_path"] = path_articolo.joinpath("foto").joinpath(lettera_album_selezionato)
     dati_articolo["codice_alfanumerico"] = lettera_album_selezionato + codice
-    dati_articolo["pacco"] = next(path_articolo.joinpath("pacco")).name
-    dati_articolo["prezzo"] = next(path_articolo.joinpath("prezzo")).name
-    dati_articolo["taglia"] = next(path_articolo.joinpath("taglia")).name
-    dati_articolo["titolo"] = next(path_articolo.joinpath("titolo")).name
+    dati_articolo["pacco"] = next((d for d in path_articolo.joinpath("pacco").iterdir() if d.is_dir()), None).name
+    dati_articolo["prezzo"] = next((d for d in path_articolo.joinpath("prezzo").iterdir() if d.is_dir()), None).name
+    dati_articolo["taglia"] = next((d for d in path_articolo.joinpath("taglia").iterdir() if d.is_dir()), None).name
     return dati_articolo
 
 
 # Metodo per avviare il browser, login e cookie
-def avvio_browser():
-    driver = start_browser(controller.sito_vinted)
+def avvio_browser(config):
+    driver = start_browser(config.sito_vinted)
     accetta_consensi_cookie(driver)
     apertura_pagina_login(driver)
     load_cookies(driver)
@@ -112,29 +113,30 @@ def avvio_browser():
 
 # Metodo per inserire i dati dell'articolo nella pagina di vendita
 def inserimento_dati_articolo_pagina_vendita(driver, dati_articolo):
-    carica_foto_pagina_vendita(driver, dati_articolo["album_foto_path"])
+    carica_foto_pagina_vendita(driver.find_element(By.ID, "photos"), dati_articolo["album_foto_path"])
     carica_titolo_pagina_vendita(driver, dati_articolo["titolo"])
     carica_descrizione_pagina_vendita(driver, dati_articolo)
-    seleziona_opzione_drop_menu_consigliata_articolo_pagina_vendita(driver, "category", "[id*='catalog-suggestion-']")
+    #seleziona_opzione_drop_menu_consigliata_articolo_pagina_vendita(driver, "category", "[id*='catalog-suggestion-']")
+    seleziona_categoria_standard_pagina_vendita(driver)
     seleziona_opzione_drop_menu_consigliata_articolo_pagina_vendita(driver, "brand", "[id*='suggested-brand-radio-']")
     seleziona_opzione_drop_menu_articolo_pagina_vendita(driver, "size", dati_articolo["taglia"])
     seleziona_opzione_drop_menu_articolo_pagina_vendita(driver, "condition", dati_articolo["condizioni"])
     seleziona_opzione_drop_menu_consigliata_articolo_pagina_vendita(driver, "color",
                                                                     ".web_ui__Checkbox__button.web_ui__Checkbox__button-left text-top")
-    # seleziona_opzione_drop_menu_articolo_pagina_vendita(driver, "material", dati_articolo["material"]) #TODO or no
+    #seleziona_opzione_drop_menu_articolo_pagina_vendita(driver, "material", dati_articolo["material"])
     seleziona_dimensione_pacco_articolo_pagina_vendita(driver, dati_articolo["pacco"])
     seleziona_prezzo_di_vendita_nuovo_articolo(driver, dati_articolo["prezzo"])
     click_carica_articolo_pagina_vendita(driver)
-    esito = verifica_click_carica_articolo_pagina_vendita(driver)
+    esito = verifica_click_carica_articolo_pagina_vendita(config, driver)
     return esito
 
 
 # Metodo che verifica se il click o l'articolo è stato caricato o è successo qualche errore torna al caricamento nuovo
 # articolo
-def verifica_click_carica_articolo_pagina_vendita(driver):
-    humanizer(2)  # TODO - Qui si potrebbe diminuire il tempo per la performance
+def verifica_click_carica_articolo_pagina_vendita(config, driver):
+    humanizer(2)
     current_url = driver.current_url
-    if current_url == controller.sito_vinted + "/items/new":
+    if current_url == config.sito_vinted + "/items/new":
         return False
     else:
         return True
@@ -151,7 +153,7 @@ def click_carica_articolo_pagina_vendita(driver):
 # Metodo per selezionare la dimensione del pacco di destinazione
 # dimensione = {1, 2, 3} una delle precedenti, 3 è il più grande
 def seleziona_dimensione_pacco_articolo_pagina_vendita(driver, dimensione):
-    id_dimensione = "package-size-" + str(dimensione)
+    id_dimensione = f"package-size-{str(dimensione)}"
     elemento = driver.find_element(By.ID, id_dimensione)
     offset_move_and_click_like_human(driver, elemento)
 
@@ -198,8 +200,26 @@ def seleziona_opzione_drop_menu_articolo_pagina_vendita(driver, cosa_cercare, te
 
 # Metodo DRY (Don't Repeat Yourself) per spostarso come un umano su un elemento web passato e cliccarci sopra con un delay
 # tra le azioni
-# TODO def move_and_click_like_human(driver, elemento):
+def move_and_click_like_human(driver, elemento):
+    small_humanizer()
+    azione = ActionChains(driver)
+    azione.pause(small_humanizer())
+    azione.move_to_element(elemento)
+    azione.pause(humanizer(0))
+    azione.click(elemento)
+    azione.pause(small_humanizer())
+    azione.perform()
+    small_humanizer()
 
+#Metodo per performare un click su un oggetto web passato per parametro
+def performa_click(driver, oggetto):
+    small_humanizer()
+    azione = ActionChains(driver).move_to_element(oggetto)
+    azione.pause(humanizer(0))
+    azione.click()
+    azione.pause(humanizer(0))
+    azione.perform()
+    small_humanizer()
 
 # Metodo per spostarsi su un elemento con un piccolo offset e cliccarlo
 def offset_move_and_click_like_human(driver, elemento):
@@ -207,6 +227,18 @@ def offset_move_and_click_like_human(driver, elemento):
     azione = ActionChains(driver)
     azione.pause(small_humanizer())
     azione.move_to_element_with_offset(elemento, random.randint(0, 60), random.randint(0, 10))
+    azione.pause(small_humanizer())
+    azione.click(elemento)
+    azione.pause(small_humanizer())
+    azione.perform()
+    small_humanizer()
+
+# Metodo per spostarsi sul centro di un elemento con un piccolo offset e cliccarlo a sinistra e destra, sotto e sopra
+def offset_move_and_click_like_human(driver, elemento,x_offset,y_offset):
+    small_humanizer()
+    azione = ActionChains(driver)
+    azione.pause(small_humanizer())
+    azione.move_to_element_with_offset(elemento, random.randint(-x_offset/2, x_offset/2),random.randint(-y_offset/2, y_offset/2))
     azione.pause(small_humanizer())
     azione.click(elemento)
     azione.pause(small_humanizer())
@@ -262,25 +294,14 @@ def seleziona_taglia_articolo_pagina_vendita(driver, taglia):
 # Metodo per risolvere la ridondanza delle stesse operazioni
 # opzioni_input = esempio:"category" indica l'id della tendina ancora chiusa delle opzioni che compaiono dopo il click
 # css_opzioni_suggerite = "[id*='catalog-suggestion-']" indica il pallino di selezione consigliata da cliccare
-def seleziona_opzione_drop_menu_consigliata_articolo_pagina_vendita(driver, opzione_input, css_opzioni_suggerite):
-    elemento = driver.find_element(By.ID, opzione_input)
+def seleziona_opzione_drop_menu_consigliata_articolo_pagina_vendita(driver, id_opzione_input, css_opzioni_suggerite):
+    elemento = driver.find_element(By.ID, id_opzione_input)
     genitore_elemento = elemento.find_element_by_xpath('..')
-    azione = ActionChains(driver)
-    azione.move_to_element(elemento)
-    azione.pause(medium_random())
-    azione.click(elemento)
-    azione.pause(medium_random())
-    azione.perform()
-    azione.pause(medium_random())
+    performa_click(driver, genitore_elemento)
     # qui troviamo le cose suggerite quando apriamo il menu delle opzioni
     opzioni_suggerite = genitore_elemento.find_element(By.CSS_SELECTOR, css_opzioni_suggerite)
     button_opzione = opzioni_suggerite.find_element(By.CLASS_NAME, "web_ui__Radio__button")
-    azione = ActionChains(driver)
-    azione.move_to_element(button_opzione)
-    azione.pause(medium_random())
-    azione.click(button_opzione)
-    azione.pause(medium_random())
-    azione.perform()
+    performa_click(opzioni_suggerite, button_opzione)
 
 
 # TODO da testare, importantissimo per il rinnnovo che il codice sia presente in modo e formato corretto
@@ -301,12 +322,7 @@ def carica_descrizione_pagina_vendita(driver, dati_articolo):
 # Metodo per selezionare il prezzo di vendita dell'articolo nella pagina di vendita nuovo articolo del sito
 def seleziona_prezzo_di_vendita_nuovo_articolo(driver, prezzo):
     elemento = driver.find_element(By.ID, "price")  # todo da controllare
-    azione = ActionChains(driver)
-    azione.move_to_element(elemento)
-    azione.pause(humanizer(0))
-    azione.click(elemento)
-    azione.pause(humanizer(0))
-    azione.perform()
+    performa_click(driver, elemento)
     humanizer(0)
     elemento.send_keys(prezzo)
     humanizer(1)
@@ -319,42 +335,39 @@ def carica_titolo_pagina_vendita(driver, titolo):
     humanizer(1)
 
 
-# Metodo per selezionare la categoria consigliata da vinted per il nostro articolo
+# Metodo per selezionare la categoria consigliata da vinted per il nostro articolo solo se nella categoria nel campo text
+# è presente la parola uomo
 def seleziona_categoria_standard_pagina_vendita(driver):
     elemento = driver.find_element(By.ID, "category")
-    genitore_elemento = elemento.find_element_by_xpath('..')
-    azione = ActionChains(driver)
-    azione.move_to_element(elemento)
-    azione.pause(medium_random())
-    azione.click(elemento)
-    azione.pause(medium_random())
-    azione.perform()
-    azione.pause(medium_random())
-    categoria = genitore_elemento.find_element(By.CSS_SELECTOR, "[id*='catalog-suggestion-']")
-    button_categoria = categoria.find_element(By.CLASS_NAME, "web_ui__Radio__button")
-    azione = ActionChains(driver)
-    azione.move_to_element(button_categoria)
-    azione.pause(medium_random())
-    azione.click(button_categoria)
-    azione.pause(medium_random())
-    azione.perform()
+    genitore_elemento = elemento.find_element(By.XPATH, '..')
+    performa_click(driver, genitore_elemento)
+    opzioni_suggerite = genitore_elemento.find_elements(By.XPATH, '//*[starts-with(@id, "catalog-suggestion-")]')
+    #opzioni_suggerite = driver.find_element(By.CSS_SELECTOR, '[id^="catalog-suggestion-"]') alterativa a quello sopra
+    opzione_suggerita_trovata = None
+    for opzione in opzioni_suggerite:
+        testo = opzione.text
+        if "Uomo" in testo:
+            opzione_suggerita_trovata = opzione
+    button_opzione = opzione_suggerita_trovata.find_element(By.CLASS_NAME, "web_ui__Radio__button")
+    performa_click(driver, button_opzione)
 
 
 # Metodo per caricare le foto nella finestra della pagina vendi articolo, si passa il driver e il path delle foto da caricare
-def carica_foto_pagina_vendita(driver, path_foto):
-    # Crea la lista completa dei file (solo immagini, opzionale)
+def carica_foto_pagina_vendita(elemento_photos, path_foto):
+    # Lista completa delle immagini
     file_list = [
         os.path.join(path_foto, f)
         for f in os.listdir(path_foto)
         if os.path.isfile(os.path.join(path_foto, f))
     ]
-    upload = driver.find_element(By.XPATH, '//span[text()="Carica le foto"]')
-    upload.send_keys(r"\n".join(file_list))
-    attesa_caricamento_elemento(driver, 10, By.CLASS_NAME, "photo-box")
-    # TODO qui ci dovrebbe essere un fallback ^^^^^^^^^^^^^
+    if not file_list:
+        raise ValueError("Nessun file trovato in " + path_foto)
+    input_file = elemento_photos.find_element(By.CSS_SELECTOR, 'input[data-testid="add-photos-input"]')
+    input_file.send_keys(r"\n".join(file_list))
+    attesa_caricamento_elemento(elemento_photos, 10, By.CLASS_NAME, "photo-box")
 
 
-# TODO da testare in qualche modo intelligente, l'offset impostato sembra che clicca sempre sul pulsante vendi, da mettere un fallback di recupero
+
 # Metodo per aprire la pagina per caricare l'articolo di vendita, perchè funzioni correttamente questo metodo deve
 # essere chiamato da un luogo in cui è presente la foto del profilo e il tasto di vendi subito
 def apertura_pagina_vendita(driver):
@@ -362,9 +375,9 @@ def apertura_pagina_vendita(driver):
     immagine_profilo = driver.find_element(By.ID, "user-menu-button")
     azione = ActionChains(driver)
     azione.move_to_element_with_offset(immagine_profilo, 50 + random.randint(0, 60), random.randint(0, 10))
-    humanizer(0)
+    azione.pause(medium_random())
     azione.click()
-    humanizer(0)
+    azione.pause(medium_random())
     azione.perform()
     humanizer(5)
     # routine di fallback
@@ -376,7 +389,7 @@ def apertura_pagina_vendita(driver):
         humanizer(0)
 
 
-# serve per accendere il browser, metterlo a schermo intero e andare ad un sito web passato per parametro
+# serve per accendere il browser, metterlo a schermo intero e andare a un sito web passato per parametro
 def start_browser(sito_web):
     options = webdriver.ChromeOptions()
     options.add_argument(r'--user-data-dir=C:\Users\Leon\AppData\Local\Google\Chrome\User Data\Default')
@@ -409,7 +422,7 @@ def accetta_consensi_cookie(driver):
 # Metodo per attendere il caricamento della pagina in caso un elemento ancora non è stato caricato
 # integer tempo = secondi dopo di cui lanciare un eccezione NoSuchElementException
 # string elemento = elemento da attendere nella pagina di caricamento
-def attesa_caricamento_elemento(driver, tempo, tipo_elemento, nome_elemento, ):
+def attesa_caricamento_elemento(driver, tempo, tipo_elemento, nome_elemento):
     WebDriverWait(driver, tempo).until(EC.presence_of_element_located((tipo_elemento, nome_elemento)))
 
 
@@ -479,11 +492,11 @@ def login(driver):
         attesa_caricamento_elemento(driver, 2, By.ID, "username")
         email_element = driver.find_element(By.ID, "username")
         email_element.clear()
-        send_delayed_keys(email_element, controller.my_email)
+        send_delayed_keys(email_element, config.my_email)
         humanizer(0)
         password_element = driver.find_element(By.ID, "password")
         password_element.clear()
-        send_delayed_keys(password_element, controller.my_password)
+        send_delayed_keys(password_element, config.my_password)
         humanizer(0)
         button = driver.find_element(By.XPATH, "//button[.//span[text()='Continua']]")
         azione = ActionChains(driver)
@@ -493,17 +506,17 @@ def login(driver):
         azione.click(button)
         azione.perform()
         time.sleep(5)
-        save_cookies(driver)
+        save_cookies(config,driver)
     except Exception:
-        humanizer(5)  # TODO cambiare con attesa_caricamento_elemento
+        attesa_caricamento_elemento(driver, 2, By.ID, "user-menu-button")
 
 
 # Metodo per salvare i cookies del utente, è stato utiulizzato solo una volta perchè abbiamo già i cookie,
 # TODO sarebbe da implementare un controllo per vedere se abbiamo il file cookies.pkl e se non lo abbiamo lo creiamo con questo metodo
-def save_cookies(driver):
+def save_cookies(config, driver):
     cookies = driver.get_cookies()
     pickle.dump(cookies, open("cookies.pkl", "wb"))
-    driver.get(controller.sito_vinted)
+    driver.get(config.sito_vinted)
 
 
 # Metodo per cariacare i cookie nel browser
@@ -527,11 +540,11 @@ def send_delayed_keys(input_element, text_to_input):
 
 # metodo per recarsi profilo del sito
 def apertura_pagina_profilo(driver, link):
-    # nome = "user-menu-button"
-    # oggetto = driver.find_element(By.ID, nome)
-    # performa_click(driver,oggetto)
-    humanizer(0)
-    carica_link(driver, link)  # TODO da modificare e mettere un action chains invece di carica_link
+    try:
+        elemento = driver.find_element(By.ID, "user-menu-button")
+        move_and_click_like_human(elemento, link)
+    except Exception:
+        carica_link(driver, link)
     humanizer(0)
 
 
@@ -570,14 +583,14 @@ def iterazione_articoli_profilo_online(driver):
     elemento = driver.find_element(By.ID, "tabs")
     genitore = elemento.find_element(By.XPATH, "..")
     articoli = genitore.find_elements(By.CSS_SELECTOR, "[data-testid='grid-item']")
-    array_link_articoli = recupera_link_articoli_versione_2(articoli)
+    array_link_articoli = recupera_link_articoli_versione_2(config, articoli)
     try:
         for link in array_link_articoli:
             humanizer(0)
             esamina_stato_articolo(driver, link)
             humanizer(0)
-    except Exception:
-        pass
+    except Exception as e:
+        print(e)
 
 
 @DeprecationWarning
@@ -596,16 +609,16 @@ def recupera_link_articoli(articoli, numero_articoli):
 
 #TESTED
 # Metodo per recuperare tutti i link degli articoli passati come array di webElements e che li ritorna come array di str
-def recupera_link_articoli_versione_2(articoli):
+def recupera_link_articoli_versione_2(config, articoli):
     array_link_articoli = []
-    for item in articoli:# TODO qui non recupera gli href
+    for item in articoli:
         try:
             link_element = item.find_element(By.CSS_SELECTOR, "a[data-testid$='--overlay-link']")
             href = link_element.get_attribute("href")
-            link = sito_vinted.join(href)
+            link = config.sito_vinted.join(href)
             array_link_articoli.append(link)
-        except:
-            pass  # se non c'è un link, ignora
+        except NoSuchElementException as e:
+            print(e) # se non c'è un link, ignora
     return array_link_articoli
 
 
@@ -623,6 +636,7 @@ def scrolla_fondo_pagina(driver, numero_articoli):
         azione.perform()
     humanizer(0)
 
+#TODO correggere offset click like human
 
 # Tested
 # Metodo per scrollare la lista degli articoli fino in fondo
@@ -649,27 +663,40 @@ def esamina_stato_articolo(driver, link_articolo):
     small_humanizer()
     driver.get(link_articolo)  # Apre l'articolo nella schermata
     attesa_caricamento_elemento(driver, 10, By.ID, "sidebar")
-    esito_di_cancellazione = controllo_eliminazione_articolo(driver)#TODO controllare
+    esito_di_cancellazione = controllo_eliminazione_articolo(driver)
     if esito_di_cancellazione:
         codice_articolo = recupera_codice_alfanumerico(driver)
-        #salva_info_articolo_off(driver, codice_articolo)# non lo salviamo perchè è complicato dal web al pc è induce possibili errori
         humanizer(0)
         cancella_articolo_online(driver)
-        scadenza_articolo_database(codice_articolo)
-        cambia_album(codice_articolo)
+        scadenza_articolo_database(config, codice_articolo)
     else:
         driver.back()
 
 
 # Metodo per cambiare identificativo del album in modo da caricare le foto diverse del articolo
-def cambia_album(codice):
-    # TODO
-    pass
+def cambia_album_nel_codice(codice):
+    codice_esaminato = codice
+    if codice_esaminato[0] == 'a':
+        codice_esaminato = codice_esaminato.replace('a', 'b')
+    elif codice_esaminato[0] == 'b':
+        codice_esaminato = codice_esaminato.replace('b', 'a')
+    return codice_esaminato
 
+
+#Metodo per cambiare nome del album da in uso all'interno del database, si passa iol path ai articoli, da ricaricare o caricati
+#path_ai_articoli = path ai articoli da caricare o caricati
+#codice_alfanumerico = vecchio codice alfanumerico del articolo
+def cambia_album_nel_database(path_ai_articoli, codice_alfanumerico):
+    try:
+        nuovo_codice_alfanumerico = cambia_album_nel_codice(codice_alfanumerico)
+        path_parziale = pathlib.Path(path_ai_articoli.joinpath(codice_alfanumerico[1:]).joinpath("foto"))
+        path = path_parziale.joinpath(f"is_{codice_alfanumerico[0]}")
+        path.rename(path_parziale.joinpath(f"is_{nuovo_codice_alfanumerico[0]}"))
+    except Exception as e:
+        print(e)
 
 # Metodo per recuperare lo stato dell'articolo online e salvarlo nella sua cartella offline per un eventuale rinnovo futuro
 def salva_info_articolo_off(driver, codice_articolo):
-    # TODO
     # articolo = ArticoloVin()
     attributi_da_settare = []
     # titolo - ok class - driver.find_elements(By.XPATH,"//*[@class='web_ui__Text__text web_ui__Text__title web_ui__Text__left']")
@@ -859,34 +886,27 @@ def apertura_articolo_nuova_finestra(driver, articolo):
     # ritorno alla scheda principale\
     driver.close()
     driver.switch_to.window(driver.window_handles[0])
-    # TODO test se driver.refresh() funziona
     driver.refresh()
 
 
 # Metodo per controllare gli articoli
 def articolo_data_scaduta(driver):
     codice_articolo = recupera_codice_alfanumerico(driver)
-    scadenza_articolo_database(codice_articolo)
+    scadenza_articolo_database(config,codice_articolo)
     pass
 
 
+
+#Metodo per cancellare il prodotto nella sua pagina, la cancellazione riporta alla lista dei prodotti
 def cancella_articolo_online(driver):
     try:
         humanizer(0)
         attesa_caricamento_elemento(driver, 5, By.XPATH, "//button[.//span[text()='Cancella']]")
         button = driver.find_element(By.XPATH, "//button[.//span[text()='Cancella']]")
-        azione = ActionChains(driver)
-        azione.move_to_element(button)
-        azione.perform()
-        azione.pause(humanizer(0))
+        offset_move_and_click_like_human(driver,button)
         attesa_caricamento_elemento(driver, 5, By.XPATH, "//button[.//span[text()='Conferma e cancella']]")
         button = driver.find_element(By.XPATH, "//button[.//span[text()='Conferma e cancella']]")
-        azione.pause(humanizer(0))
-        azione.move_to_element(button)
-        azione.pause(humanizer(0))
-        azione.perform()
-        azione.pause(humanizer(0))
-        azione.perform()
+        offset_move_and_click_like_human(driver,button)
     except Exception:
         return Exception
 
@@ -917,17 +937,6 @@ def recupera_codice_alfanumerico(driver):
 
 
 
-
-def performa_click(driver, oggetto):
-    humanizer(0)
-    azione = ActionChains(driver).move_to_element(oggetto)
-    azione.pause(humanizer(0))
-    azione.click()
-    azione.pause(humanizer(0))
-    azione.perform()
-    humanizer(0)
-
-
 @DeprecationWarning
 # Metodo per reuperare il codice del articolo tramite combinazione di hashtag
 def recupera_codice_hashtag(driver):
@@ -943,15 +952,20 @@ def recupera_codice_hashtag(driver):
 
 
 # Metodo che sposta la cartella del prodotto tramite il nome/codice del articolo, la cartella avrà come nome il codice del articolo
-def scadenza_articolo_database(codice):
-    Database_locale.sposta_dir_articolo(pathlib.Path(controller.path_caricati, codice[1:]),
-                                        pathlib.Path(controller.path_da_caricare, codice[1:]))
+def scadenza_articolo_database(config, codice):
+    path_partenza = pathlib.Path(config.path_caricati, codice[1:])
+    path_destinazione = pathlib.Path(config.path_da_caricare, codice[1:])
+    cambia_album_nel_database(path_partenza, codice)
+    Database_locale.sposta_dir_articolo(path_partenza, path_destinazione)
 
 
 # Metodo che sposta la cartella del prodotto tramite il nome/codice del articolo, la cartella avrà come nome il codice del articolo
-def rinnovo_articolo_database(codice):
-    Database_locale.sposta_dir_articolo(pathlib.Path(controller.path_da_caricare, codice[1:]),
-                                        pathlib.Path(controller.path_caricati, codice[1:]))
+def rinnovo_articolo_database(config, codice):
+    path_partenza = pathlib.Path(config.path_da_caricare, codice[1:])
+    path_destinazione = pathlib.Path(config.path_caricati, codice[1:])
+    Database_locale.sposta_dir_articolo(path_partenza, path_destinazione)
+
+
 
 
 def diagnosi():
@@ -962,7 +976,7 @@ def diagnosi():
     # driver = webdriver.Chrome(service=service, options=opts)
     driver = uc.Chrome(options=opts)
 
-    url = controller.sito_vinted
+    url = config.sito_vinted
     # url =
     driver.get(url)
     time.sleep(2)

@@ -7,6 +7,7 @@ import undetected_chromedriver as uc
 from selenium.webdriver.common.by import By
 import model
 from model import small_humanizer
+import config
 
 # Define the path to your HTML file
 pagina_articolo = str(pathlib.Path.cwd().joinpath("test").joinpath("pagina articolo.html"))
@@ -15,6 +16,7 @@ sidebar_articolo = str(pathlib.Path.cwd().joinpath("test").joinpath("sidebar pan
 articoli_utente = str(pathlib.Path.cwd().joinpath("test").joinpath("articoli utente.html"))
 articoli_utente_tabs = str(pathlib.Path.cwd().joinpath("test").joinpath("articoli utente tabs.html"))
 vendi_articolo = str(pathlib.Path.cwd().joinpath("test").joinpath("vendi un articolo.html"))
+oggetto_categoria = str(pathlib.Path.cwd().joinpath("test").joinpath("oggetto category.html"))
 pagina_venditore_casuale = str(pathlib.Path.cwd().joinpath("test").joinpath(
     "dfdanilo23 - tabs - member profile _ Vinted.html"))
 
@@ -24,7 +26,7 @@ def test_carica_foto_pagina_vendita():
     options.add_argument(r'--user-data-dir=C:\Users\Leon\AppData\Local\Google\Chrome\User Data\Default')
     driver = uc.Chrome(options=options)
     driver.get(vendi_articolo)
-    path_foto = r"C:\Users\Leon\v_bot_selenium\test\DA CARICARE\12213\foto\a"
+    path_foto = r"/test/CARICATI/12213\foto\a"
     model.carica_foto_pagina_vendita(driver, path_foto)
     elemento = driver.find_element(By.CLASS_NAME, "photo-box")
     driver.close()
@@ -76,3 +78,106 @@ def test_iterazione_articoli_profilo_online():
     small_humanizer()
     esito = model.iterazione_articoli_profilo_online(driver)
     driver.close()
+
+
+
+def test_cambia_album():
+    codice_a = "a98124"
+    return_codice_b = model.cambia_album(codice_a)
+    assert return_codice_b == "b98124"
+
+
+    codice_b = "b1233212"
+    return_codice_a = model.cambia_album(codice_b)
+    assert return_codice_a == "a1233212"
+
+#Metodo per testare lo spostamento dell'articolo dal path da CARICATI a CARICARE
+def test_scadenza_articolo_database():
+    codice_articolo = "b12213"
+    model.scadenza_articolo_database(config, codice_articolo)
+    assert True == Path(config.path_da_caricare.joinpath(codice_articolo[1:])).is_dir()
+
+#Metodo per testare lo spostamento dell'articolo dal path da CARICARE a CARICATI
+def test_rinnovo_articolo_database():
+    codice_articolo = "b12213"
+    model.rinnovo_articolo_database(config, codice_articolo)
+    assert True == Path(config.path_caricati.joinpath(codice_articolo[1:])).is_dir()
+
+def test_cambia_album_nel_database():
+    articolo = config.articolo552132
+    album_nuovo = ""
+    path_articoli_database = config.path_da_caricare
+
+    if path_articoli_database.joinpath(config.articolo552132[1:]).joinpath("foto").joinpath(f"is_a").is_dir():
+        articolo = config.articolo552132.replace("b", "a")
+        album_nuovo = "b"
+    elif path_articoli_database.joinpath(config.articolo552132[1:]).joinpath("foto").joinpath(f"is_b").is_dir():
+        album_nuovo = "a"
+    model.cambia_album_nel_database(path_articoli_database, articolo)
+    esito = pathlib.Path(path_articoli_database.joinpath(articolo[1:]).joinpath("foto").joinpath(f"is_{album_nuovo}")).is_dir()
+    assert esito == True
+
+#Meteodo per verificare se back funziona e fa andare indietro alla pagina web precedente
+def test_driver_back():
+    driver = uc.Chrome()
+    current = driver.current_url
+    driver.get(articoli_utente_tabs)
+    time.sleep(2)
+    driver.back()
+    assert current == "chrome://new-tab-page/"
+    driver.close()
+
+
+#Metodo per verificare se refresh funziona
+def test_driver_refresh():
+    driver = uc.Chrome()
+    driver.get(config.sito_google)
+    current_before = driver.current_url
+    time.sleep(1)
+    driver.refresh()
+    time.sleep(1)
+    current_now = driver.current_url
+    assert current_before == current_now
+
+
+def test_creazione_dizionario_dati_articolo():
+    path_articolo = config.path_da_caricare.joinpath(config.articolo552132[1:])
+    dati_articolo = model.creazione_dizionario_dati_articolo(path_articolo,config.articolo552132[1:])
+    assert dati_articolo["titolo"] == "titolo_articolo"
+    assert dati_articolo["taglia"] == "taglia_articolo"
+    assert dati_articolo["prezzo"] == "0"
+    assert dati_articolo["pacco"] == "2"
+    assert dati_articolo["descrizione"] == "test di descrizione"
+
+
+
+def test_carica_foto_pagina_vendita():
+    driver = uc.Chrome()
+    driver.get(vendi_articolo)
+    elemento_photos = driver.find_element(By.ID, "photos")
+    path_photo = config.path_da_caricare.joinpath(config.articolo552132[1:]).joinpath("foto").joinpath("a")
+    model.carica_foto_pagina_vendita(elemento_photos,path_photo)
+    #input_file = elemento_photos.find_element(By.CSS_SELECTOR, 'input[data-testid="add-photos-input"]')
+    time.sleep(1)
+    driver.close()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
