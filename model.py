@@ -47,12 +47,13 @@ import config
 #TODO verificare se l'album viene cambiato correttamente durante le interazioni
 
 
-def processo_rinnovo_articoli():
+def processo_rinnovo_articoli_online():
     try:
         driver = avvio_browser(config)
         apertura_pagina_profilo(driver, "https://www.vinted.it/member/168504727")
         clicca_articoli_attivi(driver)
         iterazione_articoli_profilo_online(driver)
+        cestina_articoli_offline(config)
         driver.close()
         processo_carica_articoli_online(config)
         print("Resoconto: SUCCESSO")
@@ -76,6 +77,9 @@ def processo_carica_articoli_online(config):
                 raise Exception
         except Exception:
             print(f"{codice} - Articolo Non Inserito")
+
+#metodo per cestinare gli articoli dalla cartella Caricati in cestinati perchè magari sono stati venduti
+def cestina_articoli_offline():
 
 
 # Metodo per creare un dizionario con i dati dell'articolo dai dati disponibili nei path
@@ -226,15 +230,16 @@ def offset_move_and_click_like_human(driver, elemento):
     small_humanizer()
     azione = ActionChains(driver)
     azione.pause(small_humanizer())
-    azione.move_to_element_with_offset(elemento, random.randint(0, 60), random.randint(0, 10))
+    azione.move_to_element_with_offset(elemento, random.randint(-5, 5), random.randint(-5, 5))
     azione.pause(small_humanizer())
     azione.click(elemento)
     azione.pause(small_humanizer())
     azione.perform()
     small_humanizer()
 
+# TODO finire
 # Metodo per spostarsi sul centro di un elemento con un piccolo offset e cliccarlo a sinistra e destra, sotto e sopra
-def offset_move_and_click_like_human(driver, elemento,x_offset,y_offset):
+def offset_move_and_click_like_human_v2(driver, elemento,x_offset,y_offset):
     small_humanizer()
     azione = ActionChains(driver)
     azione.pause(small_humanizer())
@@ -254,7 +259,7 @@ def selettore_elementi_multipli_pagina_di_vendita(driver, cosa_cercare):
                                               "li.web_ui__Item__item.web_ui__Item__with-divider")
     return elementi_trovati
 
-
+  #TODO - testare con aggancio dinamico alla pagina
 # Metodo per selezionare la condizione dell'articolo di vendita
 # condizione = 1-5 (intero) in ordine di qualità maggiore
 def seleziona_condizioni_articolo_pagina_vendita(driver, condizione):
@@ -272,7 +277,7 @@ def seleziona_condizioni_articolo_pagina_vendita(driver, condizione):
     azione.perform()
 
 
-# TODO verificare se è case-sensitive
+# TODO verificare se è case-sensitive, testare con aggancio dinamico alla pagina
 def seleziona_taglia_articolo_pagina_vendita(driver, taglia):
     taglia = taglia.lower()
     elemento = driver.find_element(By.ID, "size")
@@ -304,16 +309,11 @@ def seleziona_opzione_drop_menu_consigliata_articolo_pagina_vendita(driver, id_o
     performa_click(opzioni_suggerite, button_opzione)
 
 
-# TODO da testare, importantissimo per il rinnnovo che il codice sia presente in modo e formato corretto
+# TODO da testare, importantissimo per il rinnnovo che il codice sia presente in modo e formato corretto, testare con aggancio del driver alla pagina aperta
 # Metodo per caricare la descrizione e il codice del articolo
 def carica_descrizione_pagina_vendita(driver, dati_articolo):
     elemento = driver.find_element(By.ID, "description")
-    azione = ActionChains(driver)
-    azione.move_to_element(elemento)
-    azione.pause(humanizer(0))
-    azione.click(elemento)
-    azione.pause(humanizer(0))
-    azione.perform()
+    performa_click(driver, elemento)
     humanizer(0)
     send_delayed_keys(elemento, dati_articolo["descrizione"] + " " + dati_articolo["codice_alfanumerico"])
     humanizer(1)
@@ -321,7 +321,7 @@ def carica_descrizione_pagina_vendita(driver, dati_articolo):
 
 # Metodo per selezionare il prezzo di vendita dell'articolo nella pagina di vendita nuovo articolo del sito
 def seleziona_prezzo_di_vendita_nuovo_articolo(driver, prezzo):
-    elemento = driver.find_element(By.ID, "price")  # todo da controllare
+    elemento = driver.find_element(By.ID, "price")
     performa_click(driver, elemento)
     humanizer(0)
     elemento.send_keys(prezzo)
@@ -638,6 +638,7 @@ def scrolla_fondo_pagina(driver, numero_articoli):
 
 #TODO correggere offset click like human
 
+
 # Tested
 # Metodo per scrollare la lista degli articoli fino in fondo
 def scrolla_fondo_pagina_versione_2(driver):
@@ -670,8 +671,8 @@ def esamina_stato_articolo(driver, link_articolo):
         cancella_articolo_online(driver)
         scadenza_articolo_database(config, codice_articolo)
     else:
-        driver.back()
-
+        #TODO sposta l'articolo nella cartella di "rinnovo non necessario"
+        #driver.back()
 
 # Metodo per cambiare identificativo del album in modo da caricare le foto diverse del articolo
 def cambia_album_nel_codice(codice):
