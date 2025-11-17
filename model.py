@@ -1,6 +1,9 @@
 import os
 import pathlib
 import re
+import shutil
+from multiprocessing.spawn import old_main_modules
+
 import undetected_chromedriver as uc
 import pickle
 import random
@@ -13,7 +16,8 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import time
 
-import Database_locale
+import Database
+import Database_mostro
 import config
 
 
@@ -44,18 +48,24 @@ import config
 
 # TODO IDEA fare che la data dell'oggetto non viene letta dal sito ma viene salvata in locale durante il caricamento dell'oggetto
 
-#TODO verificare se l'album viene cambiato correttamente durante le interazioni
+# TODO verificare se l'album viene cambiato correttamente durante le interazioni
 
+#TODo quando si arica un articolo online,so potrebe veridicare la sua presenza nella pagina del profilo se è stato veramente caricato si potrebbe vedere se l'articolo è effettivamente presente nel negozio
 
-def processo_rinnovo_articoli_online():
+def processo_rinnovo_articoli_online(config):
     try:
         driver = avvio_browser(config)
-        apertura_pagina_profilo(driver, "https://www.vinted.it/member/168504727")
+        apertura_pagina_profilo(driver, config.pagina_profilo)
         clicca_articoli_attivi(driver)
-        iterazione_articoli_profilo_online(driver)
-        cestina_articoli_offline(config)
+        iterazione_articoli_profilo_online(config, driver)
+        # TODO test sposta_articoli_database
+        # Gli articoli venduti online sono spostati nella cartella cancellati
+        Database_locale.sposta_articoli_database(config.path_caricati, config.path_cestinati)
+        # Gli articoli staged che non andavano eliminati online (per la loro data)ora tornano nella cartella caricati
+        Database_locale.sposta_articoli_database(config.path_rinnovo_non_necessario, config.path_caricati)
         driver.close()
-        processo_carica_articoli_online(config)
+        processo_carica_articoli_online(config, config.path_articoli)  # carica online articoli che sono da rinnovare
+        processo_carica_articoli_online(config, config.path_nuovi_articoli)  # carica online articoli nuovi
         print("Resoconto: SUCCESSO")
     except Exception:
         print("Resoconto: ERRORE")
@@ -65,21 +75,33 @@ def processo_rinnovo_articoli_online():
 # Metodo per caricare articoli sun profilo del sito web, dalla cartella DA CARICARE
 def processo_carica_articoli_online(config):
     driver = avvio_browser(config)
-    codici_articoli_da_caricare = [item.name for item in config.path_da_caricare.iterdir() if item.is_dir()]
+    codici_articoli_da_caricare = Database.recupera_codici_articoli_da_inserire()
     for codice in codici_articoli_da_caricare:
         try:
-            dati_articolo = creazione_dizionario_dati_articolo(config.path_da_caricare.joinpath(codice), codice)
+            json_articolo = Database.read_articolo_database(
+                config.path_articoli.joinpath(codice).joinpath("articolo.text"))
+            if json_articolo["stato"] != "offline" or json_articolo["stato"] != "new":
+                raise Exception
             apertura_pagina_vendita(driver)
-            esito = inserimento_dati_articolo_pagina_vendita(driver, dati_articolo) #TODO DA CONTROLLARE ACCURATAMENTE
+            inserimento_dati_articolo_pagina_vendita(driver,
+                                                     json_articolo)  # TODO DA CONTROLLARE ACCURATAMENTE fare con agganciamento ad una pagina già presente
+            click_carica_articolo_pagina_vendita(driver)
+            esito = verifica_click_carica_articolo_pagina_vendita(config, driver)
             if esito:
-                rinnovo_articolo_database(config, codice)
+                json_articolo["stato"] = "online"
+                Database.update_articolo_database(config, json_articolo)
             else:
                 raise Exception
         except Exception:
             print(f"{codice} - Articolo Non Inserito")
+    driver.close()
 
-#metodo per cestinare gli articoli dalla cartella Caricati in cestinati perchè magari sono stati venduti
-def cestina_articoli_offline():
+
+# Metodo per unire due dizionari in uno solo
+def merge_two_dicts(x, y):
+    z = x.copy()  # start with keys and values of x
+    z.update(y)  # modifies z with keys and values of y
+    return z
 
 
 # Metodo per creare un dizionario con i dati dell'articolo dai dati disponibili nei path
@@ -88,7 +110,8 @@ def creazione_dizionario_dati_articolo(path_articolo, codice):
     dati_articolo = {}
     dati_articolo["titolo"] = next((d for d in path_articolo.joinpath("titolo").iterdir() if d.is_dir()), None).name
     dati_articolo["colore"] = next((d for d in path_articolo.joinpath("colore").iterdir() if d.is_dir()), None).name
-    dati_articolo["condizioni"] = next((d for d in path_articolo.joinpath("condizioni").iterdir() if d.is_dir()), None).name
+    dati_articolo["condizioni"] = next((d for d in path_articolo.joinpath("condizioni").iterdir() if d.is_dir()),
+                                       None).name
     dati_articolo["descrizione"] = ""
     with open(path_articolo.joinpath("descrizione").joinpath("descrizione.txt"), encoding='utf8') as f:
         dati_articolo["descrizione"] = f.read()
@@ -115,28 +138,28 @@ def avvio_browser(config):
     return driver
 
 
+# TODO to TEST
 # Metodo per inserire i dati dell'articolo nella pagina di vendita
 def inserimento_dati_articolo_pagina_vendita(driver, dati_articolo):
-    carica_foto_pagina_vendita(driver.find_element(By.ID, "photos"), dati_articolo["album_foto_path"])
+    carica_foto_pagina_vendita(driver.find_element(By.ID, "photos").find_element(By.CLASS_NAME, "u-hidden")
+                               , dati_articolo["album_foto_path"])
     carica_titolo_pagina_vendita(driver, dati_articolo["titolo"])
     carica_descrizione_pagina_vendita(driver, dati_articolo)
-    #seleziona_opzione_drop_menu_consigliata_articolo_pagina_vendita(driver, "category", "[id*='catalog-suggestion-']")
+    # seleziona_opzione_drop_menu_consigliata_articolo_pagina_vendita(driver, "category", "[id*='catalog-suggestion-']")
     seleziona_categoria_standard_pagina_vendita(driver)
-    seleziona_opzione_drop_menu_consigliata_articolo_pagina_vendita(driver, "brand", "[id*='suggested-brand-radio-']")
+    seleziona_opzione_drop_menu_consigliata_articolo_pagina_vendita(driver, "brand",
+                                                                    "[id*='suggested-brand-radio-']")
     seleziona_opzione_drop_menu_articolo_pagina_vendita(driver, "size", dati_articolo["taglia"])
     seleziona_opzione_drop_menu_articolo_pagina_vendita(driver, "condition", dati_articolo["condizioni"])
     seleziona_opzione_drop_menu_consigliata_articolo_pagina_vendita(driver, "color",
                                                                     ".web_ui__Checkbox__button.web_ui__Checkbox__button-left text-top")
-    #seleziona_opzione_drop_menu_articolo_pagina_vendita(driver, "material", dati_articolo["material"])
+    # seleziona_opzione_drop_menu_articolo_pagina_vendita(driver, "material", dati_articolo["material"])
     seleziona_dimensione_pacco_articolo_pagina_vendita(driver, dati_articolo["pacco"])
     seleziona_prezzo_di_vendita_nuovo_articolo(driver, dati_articolo["prezzo"])
-    click_carica_articolo_pagina_vendita(driver)
-    esito = verifica_click_carica_articolo_pagina_vendita(config, driver)
-    return esito
+    return True
 
 
-# Metodo che verifica se il click o l'articolo è stato caricato o è successo qualche errore torna al caricamento nuovo
-# articolo
+# Metodo che verifica se ci troviamo sulla pagina di inserimento dati del articolo oppure no
 def verifica_click_carica_articolo_pagina_vendita(config, driver):
     humanizer(2)
     current_url = driver.current_url
@@ -215,7 +238,8 @@ def move_and_click_like_human(driver, elemento):
     azione.perform()
     small_humanizer()
 
-#Metodo per performare un click su un oggetto web passato per parametro
+
+# Metodo per performare un click su un oggetto web passato per parametro
 def performa_click(driver, oggetto):
     small_humanizer()
     azione = ActionChains(driver).move_to_element(oggetto)
@@ -224,6 +248,7 @@ def performa_click(driver, oggetto):
     azione.pause(humanizer(0))
     azione.perform()
     small_humanizer()
+
 
 # Metodo per spostarsi su un elemento con un piccolo offset e cliccarlo
 def offset_move_and_click_like_human(driver, elemento):
@@ -237,13 +262,15 @@ def offset_move_and_click_like_human(driver, elemento):
     azione.perform()
     small_humanizer()
 
+
 # TODO finire
 # Metodo per spostarsi sul centro di un elemento con un piccolo offset e cliccarlo a sinistra e destra, sotto e sopra
-def offset_move_and_click_like_human_v2(driver, elemento,x_offset,y_offset):
+def offset_move_and_click_like_human_v2(driver, elemento, x_offset, y_offset):
     small_humanizer()
     azione = ActionChains(driver)
     azione.pause(small_humanizer())
-    azione.move_to_element_with_offset(elemento, random.randint(-x_offset/2, x_offset/2),random.randint(-y_offset/2, y_offset/2))
+    azione.move_to_element_with_offset(elemento, random.randint(-x_offset / 2, x_offset / 2),
+                                       random.randint(-y_offset / 2, y_offset / 2))
     azione.pause(small_humanizer())
     azione.click(elemento)
     azione.pause(small_humanizer())
@@ -259,7 +286,8 @@ def selettore_elementi_multipli_pagina_di_vendita(driver, cosa_cercare):
                                               "li.web_ui__Item__item.web_ui__Item__with-divider")
     return elementi_trovati
 
-  #TODO - testare con aggancio dinamico alla pagina
+
+# TODO - testare con aggancio dinamico alla pagina
 # Metodo per selezionare la condizione dell'articolo di vendita
 # condizione = 1-5 (intero) in ordine di qualità maggiore
 def seleziona_condizioni_articolo_pagina_vendita(driver, condizione):
@@ -342,7 +370,7 @@ def seleziona_categoria_standard_pagina_vendita(driver):
     genitore_elemento = elemento.find_element(By.XPATH, '..')
     performa_click(driver, genitore_elemento)
     opzioni_suggerite = genitore_elemento.find_elements(By.XPATH, '//*[starts-with(@id, "catalog-suggestion-")]')
-    #opzioni_suggerite = driver.find_element(By.CSS_SELECTOR, '[id^="catalog-suggestion-"]') alterativa a quello sopra
+    # opzioni_suggerite = driver.find_element(By.CSS_SELECTOR, '[id^="catalog-suggestion-"]') alterativa a quello sopra
     opzione_suggerita_trovata = None
     for opzione in opzioni_suggerite:
         testo = opzione.text
@@ -362,10 +390,26 @@ def carica_foto_pagina_vendita(elemento_photos, path_foto):
     ]
     if not file_list:
         raise ValueError("Nessun file trovato in " + path_foto)
-    input_file = elemento_photos.find_element(By.CSS_SELECTOR, 'input[data-testid="add-photos-input"]')
-    input_file.send_keys(r"\n".join(file_list))
+    # input_file = elemento_photos.find_element(By.CSS_SELECTOR, 'input[data-testid="add-photos-input"]')
+    files_to_upload = r"\n".join(file_list)
+    elemento_photos.send_keys(files_to_upload)
     attesa_caricamento_elemento(elemento_photos, 10, By.CLASS_NAME, "photo-box")
+    """
+    pyautogui.write(r"C:\path\to\foto1.jpg")
+pyautogui.press('enter')
+time.sleep(1)
+button.click()
+pyautogui.write(r"C:\path\to\foto2.jpg")
+pyautogui.press('enter')
 
+
+oppure     
+    pyautogui.write(r'"C:\path\to\foto1.jpg" "C:\path\to\foto2.jpg"')
+pyautogui.press('enter')
+
+    
+    
+    """
 
 
 # Metodo per aprire la pagina per caricare l'articolo di vendita, perchè funzioni correttamente questo metodo deve
@@ -506,7 +550,7 @@ def login(driver):
         azione.click(button)
         azione.perform()
         time.sleep(5)
-        save_cookies(config,driver)
+        save_cookies(config, driver)
     except Exception:
         attesa_caricamento_elemento(driver, 2, By.ID, "user-menu-button")
 
@@ -577,7 +621,7 @@ def conteggio_articoli_profilo(driver):
 
 
 # Metodo che itera gli articoli presenti nella pagina profilo del sito
-def iterazione_articoli_profilo_online(driver):
+def iterazione_articoli_profilo_online(config, driver):
     scrolla_fondo_pagina_versione_2(driver)
     humanizer(0)
     elemento = driver.find_element(By.ID, "tabs")
@@ -587,7 +631,7 @@ def iterazione_articoli_profilo_online(driver):
     try:
         for link in array_link_articoli:
             humanizer(0)
-            esamina_stato_articolo(driver, link)
+            gestisci_stato_articolo(config, driver, link)
             humanizer(0)
     except Exception as e:
         print(e)
@@ -607,7 +651,8 @@ def recupera_link_articoli(articoli, numero_articoli):
         return array_link_articoli
     return array_link_articoli
 
-#TESTED
+
+# TESTED
 # Metodo per recuperare tutti i link degli articoli passati come array di webElements e che li ritorna come array di str
 def recupera_link_articoli_versione_2(config, articoli):
     array_link_articoli = []
@@ -618,7 +663,7 @@ def recupera_link_articoli_versione_2(config, articoli):
             link = config.sito_vinted.join(href)
             array_link_articoli.append(link)
         except NoSuchElementException as e:
-            print(e) # se non c'è un link, ignora
+            print(e)  # se non c'è un link, ignora
     return array_link_articoli
 
 
@@ -636,7 +681,8 @@ def scrolla_fondo_pagina(driver, numero_articoli):
         azione.perform()
     humanizer(0)
 
-#TODO correggere offset click like human
+
+# TODO correggere offset click like human
 
 
 # Tested
@@ -660,19 +706,17 @@ def scrolla_fondo_pagina_versione_2(driver):
 
 # Questo metodo serve per aprire il link del articolo passato, controllare se è da eliminare, gestire database locale,
 # eliminarlo online come ultima fase
-def esamina_stato_articolo(driver, link_articolo):
+def gestisci_stato_articolo(config, driver, link_articolo):
     small_humanizer()
     driver.get(link_articolo)  # Apre l'articolo nella schermata
     attesa_caricamento_elemento(driver, 10, By.ID, "sidebar")
     esito_di_cancellazione = controllo_eliminazione_articolo(driver)
+    codice_articolo = recupera_codice_alfanumerico(driver)
     if esito_di_cancellazione:
-        codice_articolo = recupera_codice_alfanumerico(driver)
         humanizer(0)
         cancella_articolo_online(driver)
-        scadenza_articolo_database(config, codice_articolo)
-    else:
-        #TODO sposta l'articolo nella cartella di "rinnovo non necessario"
-        #driver.back()
+        Database.update_stato_articolo_to_offline(config, codice_articolo)
+
 
 # Metodo per cambiare identificativo del album in modo da caricare le foto diverse del articolo
 def cambia_album_nel_codice(codice):
@@ -684,9 +728,9 @@ def cambia_album_nel_codice(codice):
     return codice_esaminato
 
 
-#Metodo per cambiare nome del album da in uso all'interno del database, si passa iol path ai articoli, da ricaricare o caricati
-#path_ai_articoli = path ai articoli da caricare o caricati
-#codice_alfanumerico = vecchio codice alfanumerico del articolo
+# Metodo per cambiare nome del album da in uso all'interno del database, si passa iol path ai articoli, da ricaricare o caricati
+# path_ai_articoli = path ai articoli da caricare o caricati
+# codice_alfanumerico = vecchio codice alfanumerico del articolo
 def cambia_album_nel_database(path_ai_articoli, codice_alfanumerico):
     try:
         nuovo_codice_alfanumerico = cambia_album_nel_codice(codice_alfanumerico)
@@ -695,6 +739,7 @@ def cambia_album_nel_database(path_ai_articoli, codice_alfanumerico):
         path.rename(path_parziale.joinpath(f"is_{nuovo_codice_alfanumerico[0]}"))
     except Exception as e:
         print(e)
+
 
 # Metodo per recuperare lo stato dell'articolo online e salvarlo nella sua cartella offline per un eventuale rinnovo futuro
 def salva_info_articolo_off(driver, codice_articolo):
@@ -705,7 +750,7 @@ def salva_info_articolo_off(driver, codice_articolo):
     # breadcrumb = driver.find_element(By.CSS_SELECTOR, ".breadcrumbs.breadcrumbs--truncated")
 
 
-#Metodo per recuperare la sidebar dal profilo personale
+# Metodo per recuperare la sidebar dal profilo personale
 def recupera_sidebar_da_pagina_profilo(driver):
     sidebar = driver.find_element(By.ID, "sidebar")
     return sidebar
@@ -814,7 +859,7 @@ def indietro_pagina(driver, esito_da_cancellare):
         driver.back()
 
 
-#testato
+# testato
 # Metodo per controllare la data del articolo e vedere se dobbiamo eliminarlo oppure no
 # return True se è da eliminare
 def controllo_eliminazione_articolo(driver):
@@ -884,46 +929,47 @@ def apertura_articolo_nuova_finestra(driver, articolo):
     humanizer(0)
     if articolo_data_scaduta(driver): cancella_articolo_online(driver)
     humanizer(0)
-    # ritorno alla scheda principale\
+    """
+    #ritorno alla scheda principale\
     driver.close()
     driver.switch_to.window(driver.window_handles[0])
     driver.refresh()
+    """
 
 
 # Metodo per controllare gli articoli
 def articolo_data_scaduta(driver):
     codice_articolo = recupera_codice_alfanumerico(driver)
-    scadenza_articolo_database(config,codice_articolo)
+    scadenza_articolo_database(config, codice_articolo)
     pass
 
 
-
-#Metodo per cancellare il prodotto nella sua pagina, la cancellazione riporta alla lista dei prodotti
+# Metodo per cancellare il prodotto nella sua pagina, la cancellazione riporta alla lista dei prodotti
 def cancella_articolo_online(driver):
     try:
         humanizer(0)
         attesa_caricamento_elemento(driver, 5, By.XPATH, "//button[.//span[text()='Cancella']]")
         button = driver.find_element(By.XPATH, "//button[.//span[text()='Cancella']]")
-        offset_move_and_click_like_human(driver,button)
+        offset_move_and_click_like_human(driver, button)
         attesa_caricamento_elemento(driver, 5, By.XPATH, "//button[.//span[text()='Conferma e cancella']]")
         button = driver.find_element(By.XPATH, "//button[.//span[text()='Conferma e cancella']]")
-        offset_move_and_click_like_human(driver,button)
+        offset_move_and_click_like_human(driver, button)
     except Exception:
         return Exception
 
 
-#Passed
-#TODO ma si comporta in modo strano alcune volte ha fallito senza cambiare nulla, non caricava il codice del
+# Passed
+# TODO ma si comporta in modo strano alcune volte ha fallito senza cambiare nulla, non caricava il codice del
 # del articolo anche se era presente nell html di prova
-#Recupera codice alfanumerico dal articolo il codice può avere una "a" o "b" d'avanti al numero del articolo e indica
-#quale album di fotografie è stato utilizzato
+# Recupera codice alfanumerico dal articolo il codice può avere una "a" o "b" d'avanti al numero del articolo e indica
+# quale album di fotografie è stato utilizzato
 def recupera_codice_alfanumerico(driver):
     sidebar = recupera_sidebar_da_pagina_profilo(driver)
     desc_element = sidebar.find_element(
         By.CSS_SELECTOR,
         ".web_ui__Text__text.web_ui__Text__body.web_ui__Text__left.web_ui__Text__format span"
     )
-    #elemento = sidebar.find_element(By.CSS_SELECTOR, ".nome-classe span")
+    # elemento = sidebar.find_element(By.CSS_SELECTOR, ".nome-classe span")
     desc_text = desc_element.text
     # Cerca il codice alfanumerico tipo 'a1921242' o 'b4321'
     match = re.search(r'\b[ab]\d{1,7}\b', desc_text)
@@ -933,9 +979,6 @@ def recupera_codice_alfanumerico(driver):
         return codice
     else:
         return 0
-
-
-
 
 
 @DeprecationWarning
@@ -965,8 +1008,6 @@ def rinnovo_articolo_database(config, codice):
     path_partenza = pathlib.Path(config.path_da_caricare, codice[1:])
     path_destinazione = pathlib.Path(config.path_caricati, codice[1:])
     Database_locale.sposta_dir_articolo(path_partenza, path_destinazione)
-
-
 
 
 def diagnosi():

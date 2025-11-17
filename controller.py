@@ -7,14 +7,14 @@ import view
 
 
 # Metodo principale del controller per avviare il programma:
-def avvio_programma_controller():
+def avvio_programma_controller(config):
     while True:
         input_utente =  view.avvio_programma()
         if input_utente == "1": #rinnova gli articoli
             # model.processo_rinnovo_articoli()
             print("opzione non disponibile")
         elif input_utente == "2": #carica nuovi articoli
-            #model.processo_carica_articoli_online()
+            #model.processo_carica_articoli_online(config)
             print("opzione non disponibile")
         elif input_utente == "3": #cancella tutti gli articoli
             print("opzione non disponibile")

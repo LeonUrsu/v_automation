@@ -1,13 +1,18 @@
 import pathlib
 import time
+from idlelib.pyshell import use_subprocess
 
 from selenium import webdriver
 from pathlib import Path
+
+from selenium.webdriver.chrome.service import Service
 import undetected_chromedriver as uc
 from selenium.webdriver.common.by import By
 import model
 from model import small_humanizer
 import config
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
 
 # Define the path to your HTML file
 pagina_articolo = str(pathlib.Path.cwd().joinpath("test").joinpath("pagina articolo.html"))
@@ -20,8 +25,9 @@ oggetto_categoria = str(pathlib.Path.cwd().joinpath("test").joinpath("oggetto ca
 pagina_venditore_casuale = str(pathlib.Path.cwd().joinpath("test").joinpath(
     "dfdanilo23 - tabs - member profile _ Vinted.html"))
 
- #Metodo per testare se foto vengono caricate su vendi articolo
-def test_carica_foto_pagina_vendita():
+
+# Metodo per testare se foto vengono caricate su vendi articolo
+def qewrje():
     options = webdriver.ChromeOptions()
     options.add_argument(r'--user-data-dir=C:\Users\Leon\AppData\Local\Google\Chrome\User Data\Default')
     driver = uc.Chrome(options=options)
@@ -32,7 +38,8 @@ def test_carica_foto_pagina_vendita():
     driver.close()
     assert elemento.is_displayed() == True
 
-#Metodo che testa se una pagina con 205 articoli viene scrollata fino in fondo
+
+# Metodo che testa se una pagina con 205 articoli viene scrollata fino in fondo
 def test_scrolla_fondo_pagina_versione_2():
     driver = uc.Chrome()
     driver.get(pagina_venditore_casuale)
@@ -42,12 +49,12 @@ def test_scrolla_fondo_pagina_versione_2():
     driver.close()
     assert esito == True
 
+
 def test_print_path():
     print(pagina_venditore_casuale)
 
 
-
-#Metodo che controlla se l'articolo è scaduto, l'articolo salvato è vecchio di 5 mesi
+# Metodo che controlla se l'articolo è scaduto, l'articolo salvato è vecchio di 5 mesi
 def test_esito_di_cancellazione():
     driver = uc.Chrome()
     driver.get(pagina_articolo)
@@ -58,8 +65,7 @@ def test_esito_di_cancellazione():
     assert esito == True
 
 
-
-#Metodo che recupera codice alfanumerico, l'articolo salvato è vecchio di 5 mesi
+# Metodo che recupera codice alfanumerico, l'articolo salvato è vecchio di 5 mesi
 def test_recupera_codice_alfanumerico():
     driver = uc.Chrome()
     driver.get(pagina_articolo)
@@ -67,7 +73,7 @@ def test_recupera_codice_alfanumerico():
     small_humanizer()
     esito = model.recupera_codice_alfanumerico(driver)
     driver.close()
-    assert esito == "b1921242" # è l'articolo che è stato salvato nel html
+    assert esito == "b1921242"  # è l'articolo che è stato salvato nel html
 
 
 #
@@ -80,28 +86,29 @@ def test_iterazione_articoli_profilo_online():
     driver.close()
 
 
-
 def test_cambia_album():
     codice_a = "a98124"
     return_codice_b = model.cambia_album(codice_a)
     assert return_codice_b == "b98124"
 
-
     codice_b = "b1233212"
     return_codice_a = model.cambia_album(codice_b)
     assert return_codice_a == "a1233212"
 
-#Metodo per testare lo spostamento dell'articolo dal path da CARICATI a CARICARE
+
+# Metodo per testare lo spostamento dell'articolo dal path da CARICATI a CARICARE
 def test_scadenza_articolo_database():
     codice_articolo = "b12213"
     model.scadenza_articolo_database(config, codice_articolo)
     assert True == Path(config.path_da_caricare.joinpath(codice_articolo[1:])).is_dir()
 
-#Metodo per testare lo spostamento dell'articolo dal path da CARICARE a CARICATI
+
+# Metodo per testare lo spostamento dell'articolo dal path da CARICARE a CARICATI
 def test_rinnovo_articolo_database():
     codice_articolo = "b12213"
     model.rinnovo_articolo_database(config, codice_articolo)
     assert True == Path(config.path_caricati.joinpath(codice_articolo[1:])).is_dir()
+
 
 def test_cambia_album_nel_database():
     articolo = config.articolo552132
@@ -114,10 +121,12 @@ def test_cambia_album_nel_database():
     elif path_articoli_database.joinpath(config.articolo552132[1:]).joinpath("foto").joinpath(f"is_b").is_dir():
         album_nuovo = "a"
     model.cambia_album_nel_database(path_articoli_database, articolo)
-    esito = pathlib.Path(path_articoli_database.joinpath(articolo[1:]).joinpath("foto").joinpath(f"is_{album_nuovo}")).is_dir()
+    esito = pathlib.Path(
+        path_articoli_database.joinpath(articolo[1:]).joinpath("foto").joinpath(f"is_{album_nuovo}")).is_dir()
     assert esito == True
 
-#Meteodo per verificare se back funziona e fa andare indietro alla pagina web precedente
+
+# Meteodo per verificare se back funziona e fa andare indietro alla pagina web precedente
 def test_driver_back():
     driver = uc.Chrome()
     current = driver.current_url
@@ -128,7 +137,7 @@ def test_driver_back():
     driver.close()
 
 
-#Metodo per verificare se refresh funziona
+# Metodo per verificare se refresh funziona
 def test_driver_refresh():
     driver = uc.Chrome()
     driver.get(config.sito_google)
@@ -142,7 +151,7 @@ def test_driver_refresh():
 
 def test_creazione_dizionario_dati_articolo():
     path_articolo = config.path_da_caricare.joinpath(config.articolo552132[1:])
-    dati_articolo = model.creazione_dizionario_dati_articolo(path_articolo,config.articolo552132[1:])
+    dati_articolo = model.creazione_dizionario_dati_articolo(path_articolo, config.articolo552132[1:])
     assert dati_articolo["titolo"] == "titolo_articolo"
     assert dati_articolo["taglia"] == "taglia_articolo"
     assert dati_articolo["prezzo"] == "0"
@@ -150,16 +159,43 @@ def test_creazione_dizionario_dati_articolo():
     assert dati_articolo["descrizione"] == "test di descrizione"
 
 
-
 def test_carica_foto_pagina_vendita():
     driver = uc.Chrome()
     driver.get(vendi_articolo)
     elemento_photos = driver.find_element(By.ID, "photos")
     path_photo = config.path_da_caricare.joinpath(config.articolo552132[1:]).joinpath("foto").joinpath("a")
-    model.carica_foto_pagina_vendita(elemento_photos,path_photo)
-    #input_file = elemento_photos.find_element(By.CSS_SELECTOR, 'input[data-testid="add-photos-input"]')
+    model.carica_foto_pagina_vendita(elemento_photos, path_photo)
+    # input_file = elemento_photos.find_element(By.CSS_SELECTOR, 'input[data-testid="add-photos-input"]')
     time.sleep(1)
     driver.close()
+
+
+def test_merge_two_dicts():
+    x = {'a': 1, 'b': 2}
+    y = {'b': 3, 'c': 4}
+    z = model.merge_two_dicts(x, y)
+    print("-x- " + str(z))
+
+
+# codice da runnare in cmd
+# "C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222 --user-data-dir="C:\ChromeDebug"
+def test_hook_to_chrome():
+    options = Options()
+    options.debugger_address = "127.0.0.1:9222"  # stessa porta scelta sopra
+    service = Service(executable_path="chromedriver.exe")
+    driver = webdriver.Chrome(options=options, service=service)
+    codice_articolo = "12345"
+    path_articolo = pathlib.Path(
+        r"C:\Users\Leon\OneDrive - Università Politecnica delle Marche\_Vinted\DA CARICARE").joinpath(codice_articolo)
+    dati_articolo = model.creazione_dizionario_dati_articolo(path_articolo, codice_articolo)
+    esito = model.inserimento_dati_articolo_pagina_vendita(driver, dati_articolo)
+    time.sleep(10)
+    assert True == esito
+
+
+
+
+
 
 
 
