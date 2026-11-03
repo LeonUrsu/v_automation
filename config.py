@@ -7,7 +7,7 @@ my_email = ""
 my_password = "" 
 driver_name = "chromedriver.exe"
 sito_vinted = "https://www.vinted.it/"
-pagina_profilo = "https://www.vinted.it/member/168504727"
+pagina_profilo = ""
 
 caricati = "CARICATI"
 caricare = "CARICARE"
