@@ -3,8 +3,8 @@
 #TODO cambiare nome DA CARICARE in CARICARE
 from _pytest import pathlib
 
-my_email = "leonardovinted95@gmail.com"
-my_password = "3gigio3leo*"
+my_email = ""
+my_password = "" 
 driver_name = "chromedriver.exe"
 sito_vinted = "https://www.vinted.it/"
 pagina_profilo = "https://www.vinted.it/member/168504727"
